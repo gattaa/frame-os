@@ -1,0 +1,2 @@
+# The processor (pipeline/) writes normalized photos here.
+# The display (frame/) reads this directory. Contents are gitignored.

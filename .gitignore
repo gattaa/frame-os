@@ -1,0 +1,60 @@
+# ---- Secrets (NEVER commit) ----
+.env
+.env.*
+!.env.example
+secrets.yaml
+ha/secrets.yaml
+*.secret
+*.key
+*.pem
+token.txt
+session.json
+
+# ---- Generated runtime data ----
+# The display reads photos/ + manifest.json; these are produced by the
+# processor at runtime and must never be committed. Folder structure is
+# kept via .gitkeep, but contents are ignored.
+data/incoming/*
+data/photos/*
+data/manifest.json
+!data/incoming/.gitkeep
+!data/photos/.gitkeep
+
+# Image/video blobs anywhere
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.heic
+*.mp4
+*.mov
+# ...but keep repo assets explicitly added under frame/public if needed
+!frame/public/**/*.png
+!frame/public/**/*.svg
+
+# ---- Node / Vite (frame/) ----
+node_modules/
+dist/
+.vite/
+*.local
+.eslintcache
+
+# ---- Python (pipeline/, uploader/, telegram/) ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env.venv
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

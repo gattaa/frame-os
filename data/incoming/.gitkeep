@@ -1,0 +1,2 @@
+# Ingest channels drop raw files here. Contents are gitignored.
+# Only the processor (pipeline/) reads this directory.
