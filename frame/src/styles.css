@@ -1,0 +1,276 @@
+/*
+ * frame-os display styles.
+ *
+ * Constraints (see ../CLAUDE.md):
+ *  - Target ~Chrome 60: CSS custom properties, flexbox, object-fit are fine.
+ *  - backdrop-filter is NOT safe -> the overlay bar is a solid semi-opaque
+ *    fill by default; blur is added only behind an @supports guard and the UI
+ *    must read correctly without it.
+ *  - Light theme default (white bezel); dark "night" theme via [data-theme].
+ */
+
+:root {
+  /* Light theme (default). */
+  --bg: #11131a;
+  --bar-bg: rgba(248, 249, 251, 0.86);
+  --bar-fg: #1b1e27;
+  --bar-sub: #5b6170;
+  --bar-line: rgba(0, 0, 0, 0.08);
+  --accent: #2f6fed;
+  --btn-bg: rgba(0, 0, 0, 0.05);
+  --btn-fg: #1b1e27;
+  --chip-bg: rgba(0, 0, 0, 0.55);
+  --chip-fg: #f6f7f9;
+  --stale: #e0a106;
+}
+
+:root[data-theme="dark"] {
+  --bg: #000000;
+  --bar-bg: rgba(16, 18, 24, 0.82);
+  --bar-fg: #e7e9ef;
+  --bar-sub: #98a0b3;
+  --bar-line: rgba(255, 255, 255, 0.08);
+  --accent: #5b8bff;
+  --btn-bg: rgba(255, 255, 255, 0.08);
+  --btn-fg: #e7e9ef;
+  --chip-bg: rgba(0, 0, 0, 0.6);
+  --chip-fg: #f6f7f9;
+  --stale: #f0b323;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: none; /* kiosk: no pointer */
+}
+
+/* --- Photo layer ---------------------------------------------------------- */
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+.photo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;       /* fill 1280x800, cropping overflow */
+  object-position: center;
+  opacity: 0;
+  transition: opacity 1200ms ease-in-out;
+  will-change: opacity, transform;
+}
+
+.photo.is-front {
+  opacity: 1;
+}
+
+/* Slow Ken Burns drift; subtle so it doesn't distract. */
+@keyframes kenburns {
+  from { transform: scale(1.0) translate(0, 0); }
+  to   { transform: scale(1.08) translate(var(--kb-x, 1%), var(--kb-y, 1%)); }
+}
+.photo.kenburns.is-front {
+  animation: kenburns 14s ease-out forwards;
+}
+
+#photo-meta {
+  position: absolute;
+  left: 20px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 70%;
+  z-index: 2;
+}
+#sender-chip {
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+#sender-chip:empty { display: none; }
+#caption {
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-size: 15px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#caption:empty { display: none; }
+
+/* --- Control-center overlay ----------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  gap: 26px;
+  padding: 14px 22px;
+  border-radius: 18px;
+  /* Solid, semi-opaque fill — legible WITHOUT any blur. */
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+  border: 1px solid var(--bar-line);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  z-index: 10;
+  transition: opacity 600ms ease, transform 1200ms ease;
+  opacity: 1;
+}
+
+/* Progressive enhancement ONLY: blur if the engine truly supports it. */
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .overlay {
+    background: var(--bar-bg);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+}
+
+.overlay.dim {
+  opacity: var(--ov-dim, 0.16);
+}
+
+.ov-section {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.ov-section + .ov-section {
+  border-left: 1px solid var(--bar-line);
+  padding-left: 26px;
+}
+
+.ov-time #clock {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.5px;
+}
+.ov-time #date {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--bar-sub);
+}
+
+.ov-stats {
+  flex-direction: row;
+  gap: 22px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+.stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--bar-sub);
+}
+.stat-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.stat-value .unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--bar-sub);
+  margin-left: 2px;
+}
+
+.ov-ac {
+  gap: 4px;
+}
+.ac-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ac-name {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--bar-sub);
+}
+.ac-current {
+  font-size: 14px;
+  color: var(--bar-sub);
+}
+.ac-target {
+  font-size: 22px;
+  font-weight: 700;
+  min-width: 56px;
+  text-align: center;
+}
+.ac-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: none;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ac-btn:active { background: var(--accent); color: #fff; }
+.ac-mode {
+  border: none;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-radius: 10px;
+  padding: 5px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ac-mode:active { background: var(--accent); color: #fff; }
+
+/* Stale dot: subtle amber when showing last-known values. */
+.stale-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stale);
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.stale-dot.on { opacity: 0.9; }

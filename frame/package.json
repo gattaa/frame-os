@@ -1,0 +1,22 @@
+{
+  "name": "frame-os-pwa",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "frame-os display PWA — slideshow + Home Assistant control-center overlay for an ancient WebView",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "home-assistant-js-websocket": "^9.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@vitejs/plugin-legacy": "^5.4.3",
+    "terser": "^5.36.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

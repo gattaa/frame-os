@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#f4f5f7" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>frame-os</title>
+  </head>
+  <body>
+    <!-- Photo layer: two stacked images we crossfade between. -->
+    <div id="stage">
+      <img id="photo-a" class="photo" alt="" />
+      <img id="photo-b" class="photo" alt="" />
+      <div id="photo-meta">
+        <span id="sender-chip"></span>
+        <span id="caption"></span>
+      </div>
+    </div>
+
+    <!-- Control-center overlay: solid semi-opaque bar (blur is enhancement). -->
+    <div id="overlay" class="overlay">
+      <div class="ov-section ov-time">
+        <div id="clock">--:--</div>
+        <div id="date"></div>
+      </div>
+      <div class="ov-section ov-stats">
+        <div class="stat">
+          <span class="stat-label">Battery</span>
+          <span class="stat-value"><span id="battery">--</span><span class="unit">%</span></span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Power</span>
+          <span class="stat-value"><span id="power">--</span><span class="unit">W</span></span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Today</span>
+          <span class="stat-value"><span id="energy">--</span><span class="unit">kWh</span></span>
+        </div>
+      </div>
+      <div class="ov-section ov-ac">
+        <div class="ac-row">
+          <span class="ac-name">AC</span>
+          <span id="ac-current" class="ac-current">--&deg;</span>
+        </div>
+        <div class="ac-row">
+          <button id="ac-down" class="ac-btn" aria-label="Lower temperature">&minus;</button>
+          <span id="ac-target" class="ac-target">--&deg;</span>
+          <button id="ac-up" class="ac-btn" aria-label="Raise temperature">&plus;</button>
+        </div>
+        <div class="ac-row">
+          <button id="ac-mode" class="ac-mode" aria-label="Cycle AC mode">off</button>
+        </div>
+      </div>
+      <span id="stale-dot" class="stale-dot" title="Showing last-known values"></span>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
