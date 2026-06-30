@@ -40,6 +40,13 @@ export const ENTITIES = {
   POWER_NOW: str("VITE_HA_POWER_NOW", "sensor.grid_power"),
   ENERGY_TODAY: str("VITE_HA_ENERGY_TODAY", "sensor.solar_energy_today"),
   CLIMATE_AC: str("VITE_HA_CLIMATE_AC", "climate.living_room"),
+  /**
+   * Single source of truth for day/night — an HA input_boolean driven by the
+   * ha/ package (sun elevation + override). The PWA reads this for its theme
+   * instead of guessing from the local clock, so theme and the HA-driven screen
+   * brightness stay in lockstep.
+   */
+  NIGHT_MODE: str("VITE_HA_NIGHT_MODE", "input_boolean.frame_night_mode"),
 } as const;
 
 /** The set of entity IDs we subscribe to, derived from ENTITIES. */
@@ -48,6 +55,7 @@ export const SUBSCRIBED_ENTITY_IDS: string[] = [
   ENTITIES.POWER_NOW,
   ENTITIES.ENERGY_TODAY,
   ENTITIES.CLIMATE_AC,
+  ENTITIES.NIGHT_MODE,
 ];
 
 // --- Home Assistant connection ---------------------------------------------
@@ -93,12 +101,13 @@ export const OVERLAY = {
 } as const;
 
 /**
- * Day/night schedule (local time, 24h). Night theme runs from NIGHT_START to
- * NIGHT_END. Later this can be swapped for HA's `sun.sun`.
+ * Brightness levels (0–255) for the optional PWA-driven Fully Kiosk path
+ * (`brightness.ts`, gated by `FULLY_KIOSK.ENABLED`). Day/night is now decided
+ * by HA's `frame_night_mode`, not a local clock — by default HA also owns
+ * brightness (via the ha/ package), so these only apply if you turn on the
+ * PWA's secondary brightness control.
  */
 export const SCHEDULE = {
-  NIGHT_START_HOUR: 20,
-  NIGHT_END_HOUR: 6,
   DAY_BRIGHTNESS: 220,
   NIGHT_BRIGHTNESS: 60,
 } as const;

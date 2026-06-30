@@ -33,6 +33,8 @@ export interface FrameState {
   power: number | null;
   energyToday: number | null;
   ac: AcState | null;
+  /** HA day/night source of truth; null when unknown. true = night. */
+  nightMode: boolean | null;
   updatedAt: number;
   connected: boolean;
   stale: boolean;
@@ -45,6 +47,7 @@ const EMPTY: FrameState = {
   power: null,
   energyToday: null,
   ac: null,
+  nightMode: null,
   updatedAt: 0,
   connected: false,
   stale: true,
@@ -108,11 +111,13 @@ function fromEntityMap(map: Record<string, HassLike | undefined>): Partial<Frame
   const power = map[ENTITIES.POWER_NOW];
   const energy = map[ENTITIES.ENERGY_TODAY];
   const ac = map[ENTITIES.CLIMATE_AC];
+  const night = map[ENTITIES.NIGHT_MODE];
   return {
     battery: battery ? num(battery.state) : null,
     power: power ? num(power.state) : null,
     energyToday: energy ? num(energy.state) : null,
     ac: acFromEntity(ENTITIES.CLIMATE_AC, ac),
+    nightMode: night ? String(night.state) === "on" : null,
     updatedAt: Date.now(),
     connected: true,
     stale: false,
@@ -140,6 +145,7 @@ interface MockEntities {
   power?: HassLike;
   energy_today?: HassLike;
   ac?: HassLike;
+  night_mode?: HassLike;
 }
 
 async function pollMock(): Promise<void> {
@@ -152,6 +158,7 @@ async function pollMock(): Promise<void> {
       [ENTITIES.POWER_NOW]: j.power,
       [ENTITIES.ENERGY_TODAY]: j.energy_today,
       [ENTITIES.CLIMATE_AC]: j.ac,
+      [ENTITIES.NIGHT_MODE]: j.night_mode,
     };
     // The SW tags cache-served responses; that (or being offline) means we're
     // rendering last-known values, not live ones -> show the stale dot.

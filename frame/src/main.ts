@@ -12,7 +12,7 @@ import { DEV, USE_MOCK } from "./config";
 import { startSlideshow, toggleKenBurns } from "./photos";
 import { startData } from "./data";
 import { startOverlay } from "./overlay";
-import { scheduleTheme } from "./theme";
+import { startTheme } from "./theme";
 
 function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
@@ -29,7 +29,7 @@ function registerServiceWorker(): void {
 async function boot(): Promise<void> {
   console.info(`[frame-os] boot (mock=${USE_MOCK}, dev=${DEV})`);
 
-  scheduleTheme();   // theme + brightness first so the frame looks right
+  startTheme();      // follow HA night mode (subscribes to the data layer)
   startOverlay();    // clock ticks and controls are live immediately
   startData();       // hydrate from cache, then HA/mock (async, non-blocking)
   startSlideshow();  // manifest + crossfade (async, non-blocking)

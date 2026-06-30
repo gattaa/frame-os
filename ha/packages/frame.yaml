@@ -1,0 +1,270 @@
+# frame-os — Home Assistant package
+# =============================================================================
+# Powers the frame's live data path indirectly and its night-mode + screen
+# control directly. Drop this in via packages (see ha/README.md):
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# IMPORTANT: every entity id written as PLACEHOLDER_* or REPLACE_ME_* is NOT a
+# real id — replace it with your own (the ones the Fully Kiosk integration and
+# your energy setup actually create). Nothing here invents your sensor ids.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+input_boolean:
+  # The SINGLE SOURCE OF TRUTH for day/night. The PWA reads this for its theme
+  # (it replaces the PWA's old local-clock stub) and the automations below drive
+  # brightness off it. Anything can flip it: the sun automation, Mum, a button.
+  frame_night_mode:
+    name: Frame Night Mode
+    icon: mdi:weather-night
+
+  # Manual escape hatch for Mum. While ON, the sun + deep-night automations stop
+  # touching the frame, so whatever she sets sticks:
+  #   override ON  + night_mode OFF -> "keep it bright"
+  #   override ON  + night_mode ON  -> "force night"
+  # Turn override OFF to hand control back to the sun.
+  frame_night_override:
+    name: Frame Night Override
+    icon: mdi:hand-back-right
+
+input_number:
+  # Fully Kiosk screen brightness for each mode (0-255). Adjustable from the UI.
+  frame_brightness_day:
+    name: Frame Brightness (Day)
+    min: 0
+    max: 255
+    step: 5
+    initial: 220
+    mode: slider
+    unit_of_measurement: "lvl"
+    icon: mdi:brightness-7
+  frame_brightness_night:
+    name: Frame Brightness (Night)
+    min: 0
+    max: 255
+    step: 5
+    initial: 60
+    mode: slider
+    unit_of_measurement: "lvl"
+    icon: mdi:brightness-3
+  # Sun elevation (degrees) at which we flip night mode. ~3-6 = bright dusk,
+  # 0 = horizon, negative = darker. Gradual, not a hard below_horizon flip.
+  frame_dusk_elevation:
+    name: Frame Dusk Sun Elevation
+    min: -12
+    max: 12
+    step: 0.5
+    initial: 3
+    mode: box
+    unit_of_measurement: "°"
+    icon: mdi:weather-sunset
+
+input_datetime:
+  # The "deep night" window — screen fully off between these times.
+  frame_deepnight_start:
+    name: Frame Deep-night Start
+    has_date: false
+    has_time: true
+    initial: "23:00:00"
+  frame_deepnight_end:
+    name: Frame Deep-night End
+    has_date: false
+    has_time: true
+    initial: "06:00:00"
+
+input_button:
+  # Convenience "process now" button (see optional shell_command at the bottom).
+  frame_process_now:
+    name: Frame — Process Photos Now
+    icon: mdi:image-sync
+
+# -----------------------------------------------------------------------------
+# Automations
+# -----------------------------------------------------------------------------
+automation:
+  # 1) Night mode follows the sun (gradual, via elevation). Respects override.
+  - id: frame_nightmode_follows_sun
+    alias: "Frame: night mode follows the sun"
+    description: >-
+      Dusk (elevation falling below the threshold) turns night mode ON; dawn
+      (rising back above) turns it OFF. Skipped entirely while the override is
+      on, so Mum's manual choice stays put.
+    trigger:
+      - platform: numeric_state
+        entity_id: sun.sun
+        attribute: elevation
+        below: input_number.frame_dusk_elevation
+        id: dusk
+      - platform: numeric_state
+        entity_id: sun.sun
+        attribute: elevation
+        above: input_number.frame_dusk_elevation
+        id: dawn
+    condition:
+      - condition: state
+        entity_id: input_boolean.frame_night_override
+        state: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: dusk
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.frame_night_mode
+          - conditions:
+              - condition: trigger
+                id: dawn
+            sequence:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.frame_night_mode
+    mode: single
+
+  # 2) Brightness follows night mode. Runs on ANY night_mode change (sun OR
+  #    Mum), so manual toggles adjust brightness too.
+  - id: frame_brightness_follows_nightmode
+    alias: "Frame: brightness follows night mode"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.frame_night_mode
+        to: "on"
+        id: night
+      - platform: state
+        entity_id: input_boolean.frame_night_mode
+        to: "off"
+        id: day
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: night
+            sequence:
+              - service: light.turn_on
+                target:
+                  # REPLACE: the Fully Kiosk integration's screen light entity.
+                  entity_id: light.PLACEHOLDER_fully_kiosk_screen
+                data:
+                  brightness: "{{ states('input_number.frame_brightness_night') | int }}"
+          - conditions:
+              - condition: trigger
+                id: day
+            sequence:
+              - service: light.turn_on
+                target:
+                  entity_id: light.PLACEHOLDER_fully_kiosk_screen
+                data:
+                  brightness: "{{ states('input_number.frame_brightness_day') | int }}"
+    mode: restart
+
+  # 3) Deep-night: screen fully off at the start time. Skipped if override set.
+  - id: frame_deepnight_screen_off
+    alias: "Frame: deep-night screen off"
+    trigger:
+      - platform: time
+        at: input_datetime.frame_deepnight_start
+    condition:
+      - condition: state
+        entity_id: input_boolean.frame_night_override
+        state: "off"
+    action:
+      # The Fully Kiosk integration's screensaver switch blanks the panel.
+      # (Alternative: `light.turn_off` the screen light for a harder off.)
+      - service: switch.turn_on
+        target:
+          entity_id: switch.PLACEHOLDER_fully_kiosk_screensaver
+    mode: single
+
+  # 4) Deep-night end: screen back on, brightness re-asserted for current mode.
+  - id: frame_deepnight_screen_on
+    alias: "Frame: deep-night screen on"
+    trigger:
+      - platform: time
+        at: input_datetime.frame_deepnight_end
+    condition:
+      - condition: state
+        entity_id: input_boolean.frame_night_override
+        state: "off"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.PLACEHOLDER_fully_kiosk_screensaver
+      - service: light.turn_on
+        target:
+          entity_id: light.PLACEHOLDER_fully_kiosk_screen
+        data:
+          brightness: >-
+            {% if is_state('input_boolean.frame_night_mode', 'on') %}
+              {{ states('input_number.frame_brightness_night') | int }}
+            {% else %}
+              {{ states('input_number.frame_brightness_day') | int }}
+            {% endif %}
+    mode: single
+
+# -----------------------------------------------------------------------------
+# OPTIONAL: "energy today" stub — ADAPT TO YOURS
+# -----------------------------------------------------------------------------
+# The PWA's ENERGY_TODAY tile needs a single "kWh used/generated today" sensor.
+# If you already have one, just point ENERGY_TODAY at it and ignore this.
+# If you only have a cumulative meter, uncomment ONE of these to derive a daily
+# sensor, then set ENERGY_TODAY to sensor.frame_energy_today.
+#
+# Option A — utility_meter from a cumulative kWh sensor (resets daily):
+# utility_meter:
+#   frame_energy_today:
+#     source: sensor.REPLACE_ME_energy_total_kwh   # <- your cumulative kWh sensor
+#     cycle: daily
+#
+# Option B — template sensor (if your integration exposes a daily attribute):
+# template:
+#   - sensor:
+#       - name: Frame Energy Today
+#         unique_id: frame_energy_today
+#         unit_of_measurement: "kWh"
+#         device_class: energy
+#         state: "{{ state_attr('sensor.REPLACE_ME_solar', 'energy_today') | float(0) }}"
+
+# -----------------------------------------------------------------------------
+# OPTIONAL FALLBACK: rest_command straight to Fully Kiosk's REST API.
+# Use this ONLY if you skip the Fully Kiosk integration. Prefer the integration
+# (it gives you the light + switches used above). Put the host/password in
+# secrets.yaml. Uncomment to enable.
+# -----------------------------------------------------------------------------
+# rest_command:
+#   frame_set_brightness:
+#     # value: 0-255, passed as a service-call variable.
+#     url: "http://FULLY_IP:2323/?cmd=setStringSetting&key=screenBrightness&value={{ value }}&type=json&password=YOUR_FULLY_PASSWORD"
+#     method: POST
+#   frame_screen_on:
+#     url: "http://FULLY_IP:2323/?cmd=screenOn&type=json&password=YOUR_FULLY_PASSWORD"
+#     method: POST
+#   frame_screen_off:
+#     url: "http://FULLY_IP:2323/?cmd=screenOff&type=json&password=YOUR_FULLY_PASSWORD"
+#     method: POST
+#   # Tip: store the base + password in secrets.yaml (fully_kiosk_base,
+#   # fully_kiosk_password) and build the URL from them instead of inlining.
+
+# -----------------------------------------------------------------------------
+# OPTIONAL: "process photos now" — convenience only.
+# The pipeline processor already loop-polls incoming/ (every ~30s), so this just
+# nudges it to run immediately. The exact command depends on your deployment;
+# this example assumes the processor runs in a container named frame-os-processor.
+# Uncomment shell_command + the automation to wire the button above.
+# -----------------------------------------------------------------------------
+# shell_command:
+#   frame_process_now: "docker exec frame-os-processor python processor.py"
+#
+# automation kick (add to the automation: list above, or keep here once enabled):
+# - id: frame_process_now_button
+#   alias: "Frame: process photos now (button)"
+#   trigger:
+#     - platform: state
+#       entity_id: input_button.frame_process_now
+#   action:
+#     - service: shell_command.frame_process_now
+#   mode: single

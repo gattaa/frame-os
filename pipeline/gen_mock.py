@@ -117,6 +117,11 @@ def mock_entities() -> dict:
             "unit_of_measurement": "kWh",
             "friendly_name": "Energy Today",
         },
+        "night_mode": {
+            "entity_id": "input_boolean.frame_night_mode",
+            "state": "off",  # flip to "on" to preview the dark night theme
+            "friendly_name": "Frame Night Mode",
+        },
         "ac": {
             "entity_id": "climate.living_room",
             "state": "cool",

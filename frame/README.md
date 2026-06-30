@@ -41,7 +41,9 @@ support, so it loads the **nomodule legacy bundle**.
   a solid semi-opaque fill; blur is added only behind an
   `@supports (backdrop-filter: …)` guard and the UI is legible without it.
 - **Light theme default** (matches the white bezel) + a **dark night theme**
-  via `[data-theme]`, switched on local time by `theme.ts`.
+  via `[data-theme]`, switched by `theme.ts` off HA's
+  `input_boolean.frame_night_mode` (same boolean HA uses to drive screen
+  brightness, so the two stay in lockstep).
 
 ## Layout
 
@@ -52,7 +54,7 @@ support, so it loads the **nomodule legacy bundle**.
 | `src/data.ts` | Subscribes to HA entities via `home-assistant-js-websocket`; mirrors every update to IndexedDB; falls back to last-known on disconnect / offline / mock and flags it **stale**. Never crashes on missing entities. |
 | `src/idb.ts` | Tiny promise-based IndexedDB key/value store (hand-written, no dep). |
 | `src/overlay.ts` | The control-center bar: clock/date, stats, AC `−`/`+`/mode (calls HA climate services). Auto-dims and nudges position to avoid retention. |
-| `src/theme.ts` | `scheduleTheme()` — light/dark by local time (configurable; later swap to HA `sun.sun`). Drives brightness on transitions. |
+| `src/theme.ts` | `startTheme()` — light/dark driven by HA `input_boolean.frame_night_mode` (via the data layer). Optionally nudges PWA brightness on transitions. |
 | `src/brightness.ts` | `setBrightness(0–255)` / `setScreenOn(bool)` → Fully Kiosk REST. Gated by config so it no-ops in desktop dev. |
 | `src/main.ts` | Boot + service-worker registration. |
 | `public/sw.js` | Hand-written, Chrome-60-safe service worker (see Offline). |
