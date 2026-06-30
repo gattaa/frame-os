@@ -17,6 +17,7 @@ session.json
 data/incoming/*
 data/photos/*
 data/manifest.json
+data/mock-entities.json
 !data/incoming/.gitkeep
 !data/photos/.gitkeep
 
