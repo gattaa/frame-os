@@ -1,8 +1,8 @@
 # haos-addons/ — Home Assistant OS add-on wrappers
 
-Wraps `pipeline/`, `uploader/`, and `telegram/` as **Home Assistant OS local
-add-ons**, so the Supervisor manages them: they survive reboots, restart on
-failure, and (for `frame-uploader`) need no extra port opened on the host.
+Wraps `pipeline/` and `uploader/` as **Home Assistant OS local add-ons**, so
+the Supervisor manages them: they survive reboots, restart on failure, and
+(for `frame-uploader`) need no extra port opened on the host.
 
 **Nothing about the file/manifest contract changes.** These are wrappers, not
 a rewrite — see [`../CLAUDE.md`](../CLAUDE.md) for the contract itself
@@ -15,8 +15,7 @@ a rewrite — see [`../CLAUDE.md`](../CLAUDE.md) for the contract itself
 haos-addons/
 ├── sync.sh                # re-copies canonical source into each add-on's src/
 ├── frame-pipeline/         # processor, loop mode, no ports
-├── frame-uploader/         # FastAPI sidecar, ingress (no port), + Lovelace card
-└── frame-telegram/         # Telegram bootstrap/fallback bot, no ports
+└── frame-uploader/         # FastAPI sidecar, ingress (no port), + Lovelace card
 ```
 
 ## The shared path contract
@@ -26,14 +25,16 @@ creates them on startup if missing:
 
 | Env var | Path | Who | Mode |
 |---|---|---|---|
-| `INCOMING_DIR` | `/share/frame/incoming` | all three | `frame-pipeline` rw (reads+deletes/quarantines); `frame-uploader`/`frame-telegram` rw (writes only) |
+| `INCOMING_DIR` | `/share/frame/incoming` | both | `frame-pipeline` rw (reads+deletes/quarantines); `frame-uploader` rw (writes only) |
 | `OUTPUT_DIR` | `/config/www/frame` | `frame-pipeline` only | rw — writes `photos/` + `manifest.json`, auto-served by Home Assistant at **`/local/frame/`** |
 
 `/share` and `/config` are Home Assistant's own shared-storage and config
 volumes — mapping into them (rather than each add-on's private `/data`) is
-what lets all three containers see the same `incoming/` folder, and lets the
+what lets both containers see the same `incoming/` folder, and lets the
 processor's output land somewhere Home Assistant itself serves as static
-files.
+files. `frame-uploader` is the sole ingest channel today; the folder is
+structured so another one could be added later without touching
+`frame-pipeline`.
 
 ## Deploy
 
@@ -45,7 +46,7 @@ files.
 2. **Copy into your HAOS local add-ons location.** Home Assistant OS watches a
    folder for local add-ons, one subfolder per add-on:
    ```bash
-   cp -r haos-addons/frame-pipeline haos-addons/frame-uploader haos-addons/frame-telegram /addons/
+   cp -r haos-addons/frame-pipeline haos-addons/frame-uploader /addons/
    ```
    **Path note (verify on your system):** per Home Assistant's current
    official add-on developer docs (the "Apps" tutorial, since add-ons were
@@ -60,20 +61,18 @@ files.
    /addons/local` if the former doesn't exist) — whichever one already
    contains folders/is writable is the one Supervisor is watching.
 3. **Reload the Add-on Store**: Settings → Add-ons → Add-on Store → ⋮
-   (top-right) → **Check for updates**. All three should appear under
+   (top-right) → **Check for updates**. Both should appear under
    **Local add-ons**.
 4. Install and configure each one — see its own `DOCS.md`
    ([`frame-pipeline/DOCS.md`](./frame-pipeline/DOCS.md),
-   [`frame-uploader/DOCS.md`](./frame-uploader/DOCS.md),
-   [`frame-telegram/DOCS.md`](./frame-telegram/DOCS.md)) for options, install
+   [`frame-uploader/DOCS.md`](./frame-uploader/DOCS.md)) for options, install
    steps, and — for the uploader — the Lovelace card install and the
    ingress-vs-mapped-port security tradeoff.
 
 ## Iterating
 
 Each add-on's `src/` is a **synced copy** of the canonical service (`pipeline/`,
-`uploader/`, `telegram/` — the single source of truth). After editing
-canonical source:
+`uploader/` — the single source of truth). After editing canonical source:
 
 ```bash
 ./haos-addons/sync.sh
@@ -125,9 +124,9 @@ current tags, since floating-tag availability shifts over time).
 
 Built and checked in this project's dev sandbox (no live Home Assistant OS
 available there):
-- All three canonical services' env-driven path config, dir auto-creation,
-  the uploader's rate limiter, and its Supervisor-only IP restriction
-  middleware — all exercised directly with real HTTP requests.
+- Both canonical services' env-driven path config, dir auto-creation, the
+  uploader's rate limiter, and its Supervisor-only IP restriction middleware —
+  all exercised directly with real HTTP requests.
 - Every `config.yaml` — parsed and structurally validated (see below).
 - Every `Dockerfile`/`run.sh` — syntax-checked; **not** actually built or run**
   as a container** (this sandbox has no usable Docker daemon — attempted and

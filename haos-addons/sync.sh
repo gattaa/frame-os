@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Re-copy canonical service source into each HAOS add-on's src/ folder.
 #
-# pipeline/, uploader/, and telegram/ remain the single source of truth for
-# the actual service code (per ../CLAUDE.md's architecture contract, nothing
-# here changes what they do — only how their paths/config are supplied). This
-# script keeps each add-on's src/ in sync with that canonical code. Re-run it
-# any time you edit pipeline/processor.py, uploader/app.py, or telegram/bot.py.
+# pipeline/ and uploader/ remain the single source of truth for the actual
+# service code (per ../CLAUDE.md's architecture contract, nothing here changes
+# what they do — only how their paths/config are supplied). This script keeps
+# each add-on's src/ in sync with that canonical code. Re-run it any time you
+# edit pipeline/processor.py or uploader/app.py.
 #
 # NOT synced (maintained by hand, per add-on, in this folder):
 #   - each add-on's own requirements.txt (Alpine/musl-appropriate pins, may
@@ -37,7 +37,6 @@ sync_file() {
 
 sync_file pipeline frame-pipeline processor.py
 sync_file uploader  frame-uploader app.py
-sync_file telegram   frame-telegram bot.py
 
 # The Lovelace card isn't part of the uploader add-on's Docker build context
 # (it's a frontend resource, not container code), but it ships alongside the

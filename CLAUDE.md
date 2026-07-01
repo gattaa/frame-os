@@ -58,9 +58,9 @@ This is the central design rule. Keep these boundaries clean:
 
 ```
   ingest channels  ──drop files──▶  data/incoming/  ──▶  PROCESSOR  ──writes──▶  data/photos/ + data/manifest.json  ──reads──▶  DISPLAY (PWA)
-   (telegram,                                            (the ONLY                                                       (read-only)
-    uploader,                                             writer to
-    future...)                                            photos/ &
+   (uploader,                                            (the ONLY                                                       (read-only)
+    future...)                                            writer to
+                                                          photos/ &
                                                           manifest)
 ```
 
@@ -72,8 +72,10 @@ This is the central design rule. Keep these boundaries clean:
 - **Ingest channels only drop raw files into `data/incoming/`.** They know
   nothing about photo processing or the manifest format.
 - **Channels must be swappable** without touching the processor or the PWA.
-  Adding/removing a channel (Telegram, the uploader, a future USB import, etc.)
-  must not require changes outside that channel's own folder.
+  Adding/removing a channel (the HA uploader, a future Telegram bot or USB
+  import, etc.) must not require changes outside that channel's own folder.
+  The only channel today is the HA uploader (`channel: "ha"` in meta.json);
+  the contract stays channel-agnostic so more can be added later.
 
 ### 4. Secrets
 - All secrets live in **`.env`** (apps) and **`ha/secrets.yaml`** (Home
@@ -93,8 +95,7 @@ This is the central design rule. Keep these boundaries clean:
 frame-os/
 ├── frame/      # the PWA (Vite + TS) — the display. READ-ONLY consumer.
 ├── pipeline/   # the processor + a mock-data generator. ONLY writer of photos/+manifest.
-├── uploader/   # FastAPI sidecar + custom Lovelace upload card (an ingest channel)
-├── telegram/   # standalone bootstrap bot — test harness + fallback ingest channel
+├── uploader/   # FastAPI sidecar + custom Lovelace upload card (the ingest channel)
 ├── ha/         # Home Assistant YAML snippets (dashboards, sensors, automations)
 └── data/       # runtime data (gitignored contents)
     ├── incoming/   # channels drop raw files here
@@ -111,17 +112,17 @@ frame-os/
   the frame without real ingest.
 - **uploader/** — a **FastAPI** sidecar and a **custom Lovelace upload card** so
   photos can be added from the HA dashboard. It is just an ingest channel: it
-  writes only into `data/incoming/`.
-- **telegram/** — a standalone bot used as a **bootstrap/test harness** and a
-  **fallback channel**. Also only writes into `data/incoming/`.
+  writes only into `data/incoming/`. It's the sole ingest channel today
+  (`channel: "ha"`), but the contract is channel-agnostic — nothing stops a
+  future channel being added in its own folder without touching this one.
 - **ha/** — YAML snippets for Home Assistant (sensors, AC controls,
   dashboard/Lovelace config). Secrets via `ha/secrets.yaml` (gitignored).
 
 ## Conventions & workflow
 
-- **Tech:** `frame/` is TypeScript + Vite. `pipeline/`, `uploader/`, and
-  `telegram/` are Python (FastAPI for the uploader). Keep each component
-  self-contained in its folder.
+- **Tech:** `frame/` is TypeScript + Vite. `pipeline/` and `uploader/` are
+  Python (FastAPI for the uploader). Keep each component self-contained in its
+  folder.
 - **Don't cross the contract boundaries** described above. If a change seems to
   require the display to write files, or an ingest channel to know about the
   manifest, stop — that's a design smell.

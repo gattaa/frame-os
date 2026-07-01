@@ -41,7 +41,7 @@ dist/
 *.local
 .eslintcache
 
-# ---- Python (pipeline/, uploader/, telegram/) ----
+# ---- Python (pipeline/, uploader/) ----
 __pycache__/
 *.py[cod]
 *.egg-info/

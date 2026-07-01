@@ -2,10 +2,10 @@ name: "frame-os Pipeline Processor"
 slug: "frame_pipeline"
 description: >-
   Channel-agnostic photo processor for frame-os. Watches share/frame/incoming
-  for new photos dropped by ingest channels (the frame-uploader / frame-telegram
-  add-ons, or any other channel), normalizes them (EXIF rotation, downscale,
-  re-encode, strip EXIF), and publishes photos/ + manifest.json under
-  config/www/frame so the frame-os display PWA can read them at /local/frame/.
+  for new photos dropped by ingest channels (the frame-uploader add-on today,
+  or any other channel), normalizes them (EXIF rotation, downscale, re-encode,
+  strip EXIF), and publishes photos/ + manifest.json under config/www/frame
+  so the frame-os display PWA can read them at /local/frame/.
 version: "1.0.0"
 arch:
   - amd64

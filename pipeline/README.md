@@ -34,7 +34,7 @@ incoming/                         processor                photos/ + manifest.js
 |------------|--------|----------------------------------------------------|
 | `uploader` | string | who added the photo (display name / handle)        |
 | `caption`  | string | caption to show with the photo (may be empty)      |
-| `channel`  | string | which ingest channel produced it (`telegram`, …)   |
+| `channel`  | string | which ingest channel produced it (currently just `"ha"`; the field stays channel-agnostic so more can be added later) |
 | `ts`       | string | ISO-8601 UTC timestamp the photo was added         |
 
 Example:
@@ -43,7 +43,7 @@ Example:
 {
   "uploader": "alice",
   "caption": "Sunrise over the hills",
-  "channel": "telegram",
+  "channel": "ha",
   "ts": "2026-06-01T09:00:00Z"
 }
 ```

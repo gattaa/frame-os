@@ -18,11 +18,14 @@ processing, and display.**
 ```
   ingest channels                processor                 display (PWA)
   ┌───────────┐   raw files   ┌─────────────┐   photos/   ┌───────────┐
-  │ telegram  │ ───────────▶  │             │ ──────────▶ │           │
-  │ uploader  │ ─▶ incoming/  │  the ONLY   │  manifest   │ READ-ONLY │
-  │ (future…) │ ───────────▶  │   writer    │ ──────────▶ │           │
+  │ uploader  │ ───────────▶  │  the ONLY   │  manifest   │ READ-ONLY │
+  │ (future…) │ ─▶ incoming/  │   writer    │ ──────────▶ │           │
   └───────────┘               └─────────────┘             └───────────┘
 ```
+
+The HA uploader is the sole ingest channel today (every photo's `meta.json`
+carries `channel: "ha"`); the contract stays channel-agnostic so more can be
+added later without touching the processor or the PWA.
 
 1. **Ingest channels** only ever drop raw files into `data/incoming/`. They
    know nothing about image processing or the manifest format.
@@ -40,10 +43,9 @@ touching the processor or the PWA — that's the point.
 |--------------|------------|----------------------|
 | `frame/`     | The PWA (Vite + TypeScript) — the display | **Reads** `photos/` + `manifest.json` |
 | `pipeline/`  | The processor + a mock-data generator | **Only writer** of `photos/` + `manifest.json` |
-| `uploader/`  | FastAPI sidecar + custom Lovelace upload card | Ingest channel → writes `incoming/` |
-| `telegram/`  | Standalone bootstrap bot (test harness + fallback) | Ingest channel → writes `incoming/` |
+| `uploader/`  | FastAPI sidecar + custom Lovelace upload card | The (sole) ingest channel → writes `incoming/` |
 | `ha/`        | Home Assistant YAML snippets | Provides live data + AC controls to the PWA |
-| `haos-addons/` | Home Assistant OS add-on wrappers for `pipeline/`, `uploader/`, `telegram/` | Same channels/processor, Supervisor-managed (survives reboots) |
+| `haos-addons/` | Home Assistant OS add-on wrappers for `pipeline/`, `uploader/` | Same channel/processor, Supervisor-managed (survives reboots) |
 | `data/`      | Runtime data (gitignored): `incoming/`, `photos/`, `manifest.json` | The files the contract is about |
 
 See each folder's own `README.md` for component-level notes.
@@ -80,8 +82,8 @@ mock data, drop an image + a hand-written `<image>.meta.json` into
 
 ## Status
 
-**All five components are implemented and have been smoke-tested end-to-end**
-(mock generation → processor → manifest → PWA, and both real ingest channels →
+**All components are implemented and have been smoke-tested end-to-end**
+(mock generation → processor → manifest → PWA, and the ingest channel →
 processor → PWA), then passed a full code review with the resulting fixes
 applied:
 
@@ -89,10 +91,9 @@ applied:
 |--------|-------|
 | `pipeline/` | Processor + mock generator implemented and verified (idempotent, EXIF-safe downscaling, atomic writes, self-healing manifest). |
 | `frame/` | PWA implemented: slideshow, HA-driven overlay + theming, offline service worker. `npm run build` passes with a verified Chrome-60 legacy bundle. |
-| `uploader/` | FastAPI sidecar + Lovelace card implemented; verified end-to-end (upload → `incoming/` → processor → manifest). |
-| `telegram/` | Bootstrap/fallback bot implemented; verified end-to-end with the same drop contract as the uploader. |
+| `uploader/` | FastAPI sidecar + Lovelace card implemented; verified end-to-end (upload → `incoming/` → processor → manifest). The sole ingest channel today — the contract stays channel-agnostic so more can be added later. |
 | `ha/` | Home Assistant package (night mode, override, brightness/screen automations) implemented and YAML-validated; entity IDs are placeholders pending your real ones. |
-| `haos-addons/` | Optional: run `pipeline/`, `uploader/`, `telegram/` as Home Assistant OS add-ons instead of docker-compose/bare processes. Config validated; see its README for what's verified vs. not (no live HAOS was available to build/run against in this environment). |
+| `haos-addons/` | Optional: run `pipeline/`, `uploader/` as Home Assistant OS add-ons instead of docker-compose/bare processes. Config validated; see its README for what's verified vs. not (no live HAOS was available to build/run against in this environment). |
 
 **What's left before this runs on the real frame:** swap the placeholder
 entity IDs in `ha/packages/frame.yaml` and `frame/.env` for your real Home

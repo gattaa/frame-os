@@ -1,8 +1,0 @@
-# Alpine/musl-appropriate pins for this add-on (see ../sync.sh — this file is
-# NOT synced from ../../telegram/requirements.txt, maintained separately).
-#
-# python-dotenv is intentionally omitted here: it's only used by
-# ../../telegram/bot.py to load a local .env file for non-HAOS runs, wrapped
-# in `try/except ImportError` so it's a no-op when absent. On this add-on,
-# bashio supplies the environment directly via run.sh — no .env file exists.
-python-telegram-bot>=21,<23

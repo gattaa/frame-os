@@ -10,8 +10,9 @@ why that boundary matters.
 Runs the processor in `--loop` mode (polls forever). On each cycle it:
 
 1. Scans `/share/frame/incoming` for settled `<image>` + `<image>.meta.json`
-   pairs dropped there by any ingest channel (the `frame-uploader` add-on, the
-   `frame-telegram` add-on, or anything else writing the same contract).
+   pairs dropped there by any ingest channel — today that's just the
+   `frame-uploader` add-on, but the contract stays channel-agnostic so more
+   could write here later without any change to this add-on.
 2. Normalizes each photo (honors EXIF rotation, downscales to the configured
    long-edge max, re-encodes JPEG, strips EXIF) and writes it to
    `/config/www/frame/photos/`.

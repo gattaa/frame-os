@@ -33,13 +33,14 @@ from processor import atomic_write_bytes, atomic_write_json, content_id
 WIDTH, HEIGHT = 1280, 800
 
 # (label, caption, uploader, channel, background RGB)
+# "ha" is the only real ingest channel (the HA uploader) — see ../CLAUDE.md.
 MOCKS: List[Tuple[str, str, str, str, Tuple[int, int, int]]] = [
-    ("01", "Sunrise over the hills", "alice", "telegram", (242, 201, 168)),
-    ("02", "Beach day with the kids", "bob", "uploader", (168, 213, 226)),
-    ("03", "City lights at night", "alice", "telegram", (60, 64, 91)),
-    ("04", "Forest hike", "carol", "uploader", (170, 200, 160)),
-    ("05", "Birthday dinner", "bob", "telegram", (224, 178, 196)),
-    ("06", "First snow", "carol", "uploader", (224, 230, 238)),
+    ("01", "Sunrise over the hills", "alice", "ha", (242, 201, 168)),
+    ("02", "Beach day with the kids", "bob", "ha", (168, 213, 226)),
+    ("03", "City lights at night", "alice", "ha", (60, 64, 91)),
+    ("04", "Forest hike", "carol", "ha", (170, 200, 160)),
+    ("05", "Birthday dinner", "bob", "ha", (224, 178, 196)),
+    ("06", "First snow", "carol", "ha", (224, 230, 238)),
 ]
 
 
