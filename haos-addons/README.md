@@ -15,7 +15,7 @@ a rewrite — see [`../CLAUDE.md`](../CLAUDE.md) for the contract itself
 haos-addons/
 ├── sync.sh                # re-copies canonical source into each add-on's src/
 ├── frame-pipeline/         # processor, loop mode, no ports
-└── frame-uploader/         # FastAPI sidecar, ingress (no port), + Lovelace card
+└── frame-uploader/         # FastAPI sidecar + self-served upload page, ingress (no port)
 ```
 
 ## The shared path contract
@@ -66,8 +66,8 @@ structured so another one could be added later without touching
 4. Install and configure each one — see its own `DOCS.md`
    ([`frame-pipeline/DOCS.md`](./frame-pipeline/DOCS.md),
    [`frame-uploader/DOCS.md`](./frame-uploader/DOCS.md)) for options, install
-   steps, and — for the uploader — the Lovelace card install and the
-   ingress-vs-mapped-port security tradeoff.
+   steps, and — for the uploader — the ingress-vs-mapped-port security
+   tradeoff.
 
 ## Iterating
 
@@ -136,9 +136,8 @@ available there):
   API), for both `amd64` and `aarch64`.
 
 **Not verified against a live Supervisor** (none available here): the actual
-`docker build` of each add-on, the Lovelace card's ingress-URL resolution via
-`hass.callApi('get', 'hassio/addons/<slug>/info')`, and the exact local-addon
-slug HA assigns (`frame_uploader` vs. `local_frame_uploader`) — these follow
-documented conventions but should be checked on your own HAOS install before
-you rely on them. See `frame-uploader/DOCS.md` for the fully-tested
-mapped-port fallback if ingress doesn't behave as documented for you.
+`docker build` of each add-on, and the exact local-addon slug HA assigns
+(`frame_uploader` vs. `local_frame_uploader`) — these follow documented
+conventions but should be checked on your own HAOS install before you rely on
+them. See `frame-uploader/DOCS.md` for the fully-tested mapped-port fallback
+if ingress doesn't behave as documented for you.

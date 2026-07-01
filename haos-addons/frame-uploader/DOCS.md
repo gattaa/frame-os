@@ -5,25 +5,37 @@ as a Home Assistant OS add-on. This is an **ingest channel**: it only ever
 writes into `/share/frame/incoming` — never `photos/` or `manifest.json`. See
 [`../../CLAUDE.md`](../../CLAUDE.md) for the full architecture contract.
 
-## Security: what's shipped
+The add-on serves its own upload UI at `GET /` — no Lovelace card or dashboard
+config needed. Reached via HA Ingress, it can live as a **sidebar panel**
+(see "Show in sidebar" below) or simply be opened from Settings → Add-ons →
+frame-os Uploader → **Open Web UI**.
 
-The uploader is reachable from your public reverse proxy, so it must never be
-a bare open POST endpoint. This add-on ships **two layers together**, not one
-instead of the other:
+## Security model
 
 1. **HA Ingress** (`ingress: true`, `ingress_port: 8099`, no `ports:` key in
    `config.yaml`) — no port is opened on the host at all. The only way to
-   reach the container is through the Supervisor's ingress proxy. Per Home
-   Assistant's own ingress requirements, the add-on **must** deny anything not
-   from the Supervisor's fixed internal address `172.30.32.2` — `run.sh` sets
+   reach the container is through the Supervisor's ingress proxy, which only
+   proxies requests for an already-logged-in HA user. Per Home Assistant's own
+   ingress requirements, the add-on **must** deny anything not from the
+   Supervisor's fixed internal address `172.30.32.2` — `run.sh` sets
    `RESTRICT_TO_SUPERVISOR=true`, which `app.py`'s middleware enforces (see
    `../../uploader/app.py`, function `_restrict_to_supervisor`).
-2. **A mandatory shared secret** (`upload_token`, required, minimum 16 chars —
-   the add-on **refuses to start** without one; see `config.yaml`'s
-   `match(^.{16,}$)` schema and the matching check in `run.sh`). This is
-   defense-in-depth on top of ingress, and it's also the **exact mechanism**
-   you fall back to if you disable ingress and map a port instead (see
-   "Alternative: mapped port" below).
+2. **`upload_token` is enforced only for non-ingress traffic.** Once the
+   middleware above has verified a request came from the Supervisor's ingress
+   proxy, it's already known to be authenticated (by the HA session) and
+   same-origin (the ingress iframe serves the upload page and `/upload` under
+   the same per-add-on path prefix) — a second bearer-token check on top of
+   that would be pure ceremony, and it would mean the upload page's plain
+   client-side JS would need to know a secret it has no way to keep
+   confidential in a page's source. So: the middleware sets
+   `request.state.ingress_verified = True` once a request has passed the
+   Supervisor-IP check, and the `/upload` route only rejects a
+   missing/wrong `X-Upload-Token` when `ingress_verified` is `False` — i.e.
+   `upload_token` is real, load-bearing protection **only** in the mapped-port
+   fallback below (where `RESTRICT_TO_SUPERVISOR` is unset and nothing else
+   authenticates the caller). It's still **required** at setup time
+   (`config.yaml`'s `match(^.{16,}$)` schema, checked again in `run.sh`) so
+   switching to the fallback later doesn't silently ship with a blank secret.
 
 Also always on regardless of transport: full image decode validation (not
 just a header sniff — rejects truncated uploads), a size cap (`max_upload_mb`),
@@ -31,8 +43,7 @@ and a per-client rate limit (`rate_limit_per_min`).
 
 **Honesty note:** the ingress transport is implemented per Home Assistant's
 documented add-on/ingress conventions (config.yaml flags, the `172.30.32.2`
-restriction, and the Lovelace card's `hassio/addons/<slug>/info` lookup for
-`ingress_url`), but it was **not exercised against a live Home Assistant
+restriction), but it was **not exercised against a live Home Assistant
 Supervisor** while building this — there was no HAOS instance available in
 that environment. Test it on your own install before relying on it. If
 anything about the ingress path doesn't work for you, the mapped-port fallback
@@ -43,7 +54,7 @@ security checks, just a different door.
 
 | Option | Type | Default | Description |
 |--------|------|---------|--------------|
-| `upload_token` | password (≥16 chars, **required**) | *(blank — you must set it)* | Shared secret the Lovelace card must send as `X-Upload-Token`. Generate one with `openssl rand -hex 32` (or any 16+ char random string) and paste it here **and** into the card's `token:` config. |
+| `upload_token` | password (≥16 chars, **required**) | *(blank — you must set it)* | Shared secret enforced only for the mapped-port fallback (see below) — ignored for ingress-origin requests, which don't need it (see "Security model" above). Still required at setup so the fallback is never accidentally left unprotected. Generate one with `openssl rand -hex 32`. |
 | `max_upload_mb` | int (1–100) | `25` | Hard size cap per upload. |
 | `rate_limit_per_min` | int (1–120) | `12` | Max uploads accepted per client per rolling 60s window; extras get `429`. |
 | `allowed_origins` | str | `*` | CORS allowlist. Only matters for the mapped-port fallback (ingress requests are same-origin, so CORS doesn't apply). |
@@ -57,31 +68,24 @@ security checks, just a different door.
 3. Install it. **Before starting**, open its **Configuration** tab and set
    `upload_token` — the add-on will refuse to boot without one (both
    Supervisor's schema validation and a belt-and-suspenders check in `run.sh`
-   enforce this).
+   enforce this), even though it isn't checked for ingress traffic — see
+   "Security model" above for why it's still mandatory.
 4. Start it. Check the **Log** tab for `frame-uploader starting on :8099
    (ingress only)`.
-5. Its **Info** tab shows the exact **slug** Supervisor assigned (needed for
-   the card's `ingress_slug:` — see below; it may or may not be prefixed with
-   `local_` depending on your Supervisor version).
 
-## Install the Lovelace card
+## Open the upload page / show it in the sidebar
 
-The card JS ships in [`lovelace/frame-os-upload-card.js`](./lovelace/frame-os-upload-card.js)
-(synced from `../../uploader/lovelace/`, same file — not part of this add-on's
-Docker build, it's a frontend resource).
+The add-on's **Info** tab has an **Open Web UI** button that opens the upload
+page (`GET /`) directly via ingress — that alone is enough to use it.
 
-1. Copy `lovelace/frame-os-upload-card.js` to `<HA config>/www/frame-os-upload-card.js`
-   (HA serves `<config>/www/` at `/local/`).
-2. Settings → Dashboards → ⋮ → Resources → Add: URL `/local/frame-os-upload-card.js`,
-   type **JavaScript Module**.
-3. Add the card to a dashboard:
+To pin it as a sidebar panel instead:
 
-   ```yaml
-   type: custom:frame-os-upload-card
-   ingress_slug: frame_uploader   # from the add-on's Info tab — verify yours!
-   token: "<the same upload_token you set above>"
-   title: Add a photo
-   ```
+1. Go to the add-on's **Info** tab.
+2. Toggle **"Show in sidebar"**.
+3. "Frame Photos" (from `panel_title` in `config.yaml`, with the
+   `panel_icon: mdi:image-plus` icon) appears in the HA sidebar for that user.
+   The toggle is per-user, so each family member does this once on their own
+   HA account.
 
 ## Alternative: mapped port (skip ingress)
 
@@ -89,7 +93,7 @@ If ingress gives you trouble, or you'd rather manage exposure yourself behind
 your own reverse proxy:
 
 1. Edit `config.yaml`: delete the `ingress:` / `ingress_port:` /
-   `panel_icon:` lines, and add:
+   `panel_icon:` / `panel_title:` lines, and add:
    ```yaml
    ports:
      8099/tcp: 8099
@@ -99,16 +103,15 @@ your own reverse proxy:
 2. Bump `version` and reinstall (see "Iterating" below).
 3. Proxy `https://ha.example.com/frame-upload/` → the add-on's host:8099 in
    your nginx config (see the canonical `../../uploader/README.md` for a ready
-   nginx `location` block).
-4. Configure the card with **Option B** instead:
-   ```yaml
-   type: custom:frame-os-upload-card
-   sidecar_url: https://ha.example.com/frame-upload/upload
-   token: "<the same upload_token>"
-   ```
+   nginx `location` block), then open `https://ha.example.com/frame-upload/`
+   to get the same upload page.
    `RESTRICT_TO_SUPERVISOR` no longer applies in this mode (only ingress
-   traffic originates from `172.30.32.2`); the shared-secret token is what's
-   protecting the endpoint here, same as the plain docker-compose deployment.
+   traffic originates from `172.30.32.2`); the shared-secret `upload_token` is
+   now the only thing protecting the endpoint, so make sure your reverse
+   proxy passes `X-Upload-Token` through unmodified if you inject it there, or
+   have callers set it directly. The bundled upload page itself never sends
+   the token (it's built for the ingress path) — a mapped-port deployment
+   needs its own client (e.g. `curl`, or a small script) that adds the header.
 
 ## Iterating on the code
 
@@ -118,7 +121,7 @@ separately (Alpine-appropriate; notably plain `uvicorn`, not the `[standard]`
 extra — see the comment at the top of that file for why).
 
 ```bash
-./haos-addons/sync.sh   # re-copies uploader/app.py + the Lovelace card in
+./haos-addons/sync.sh   # re-copies uploader/app.py in
 ```
 
 Then bump `version` in `config.yaml` and **Check for updates** → **Update** in

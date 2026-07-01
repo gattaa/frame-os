@@ -43,7 +43,7 @@ touching the processor or the PWA — that's the point.
 |--------------|------------|----------------------|
 | `frame/`     | The PWA (Vite + TypeScript) — the display | **Reads** `photos/` + `manifest.json` |
 | `pipeline/`  | The processor + a mock-data generator | **Only writer** of `photos/` + `manifest.json` |
-| `uploader/`  | FastAPI sidecar + custom Lovelace upload card | The (sole) ingest channel → writes `incoming/` |
+| `uploader/`  | FastAPI sidecar + self-served upload page (ingress sidebar panel) | The (sole) ingest channel → writes `incoming/` |
 | `ha/`        | Home Assistant YAML snippets | Provides live data + AC controls to the PWA |
 | `haos-addons/` | Home Assistant OS add-on wrappers for `pipeline/`, `uploader/` | Same channel/processor, Supervisor-managed (survives reboots) |
 | `data/`      | Runtime data (gitignored): `incoming/`, `photos/`, `manifest.json` | The files the contract is about |
@@ -91,7 +91,7 @@ applied:
 |--------|-------|
 | `pipeline/` | Processor + mock generator implemented and verified (idempotent, EXIF-safe downscaling, atomic writes, self-healing manifest). |
 | `frame/` | PWA implemented: slideshow, HA-driven overlay + theming, offline service worker. `npm run build` passes with a verified Chrome-60 legacy bundle. |
-| `uploader/` | FastAPI sidecar + Lovelace card implemented; verified end-to-end (upload → `incoming/` → processor → manifest). The sole ingest channel today — the contract stays channel-agnostic so more can be added later. |
+| `uploader/` | FastAPI sidecar + self-served upload page implemented (superseding the earlier Lovelace-card approach); verified end-to-end (upload → `incoming/` → processor → manifest). The sole ingest channel today — the contract stays channel-agnostic so more can be added later. |
 | `ha/` | Home Assistant package (night mode, override, brightness/screen automations) implemented and YAML-validated; entity IDs are placeholders pending your real ones. |
 | `haos-addons/` | Optional: run `pipeline/`, `uploader/` as Home Assistant OS add-ons instead of docker-compose/bare processes. Config validated; see its README for what's verified vs. not (no live HAOS was available to build/run against in this environment). |
 

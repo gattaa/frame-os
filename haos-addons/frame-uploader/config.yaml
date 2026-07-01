@@ -1,12 +1,12 @@
 name: "frame-os Uploader"
 slug: "frame_uploader"
 description: >-
-  FastAPI ingest sidecar for frame-os. Accepts photo uploads from the
-  frame-os-upload-card Lovelace card and drops them (with the shared
-  {uploader, caption, channel:"ha", ts} sidecar) into share/frame/incoming for
-  the frame-pipeline add-on to pick up. Reachable via Home Assistant Ingress
-  by default — no port is opened on the host.
-version: "1.0.0"
+  FastAPI ingest sidecar for frame-os. Serves its own upload page (opened as
+  an HA Ingress sidebar panel) and drops uploads (with the shared {uploader,
+  caption, channel:"ha", ts} sidecar) into share/frame/incoming for the
+  frame-pipeline add-on to pick up. Reachable via Home Assistant Ingress by
+  default — no port is opened on the host.
+version: "1.1.0"
 arch:
   - amd64
   - aarch64
@@ -17,10 +17,13 @@ startup: services
 # Ingress: no `ports:` key here at all, so nothing is published to the host.
 # The container is only reachable through the Supervisor's ingress proxy
 # (172.30.32.2), which is also enforced at the application layer — see
-# RESTRICT_TO_SUPERVISOR in run.sh / ../../uploader/app.py.
+# RESTRICT_TO_SUPERVISOR in run.sh / ../../uploader/app.py. panel_icon +
+# panel_title make it eligible for the HA sidebar (still requires the user to
+# flip "Show in sidebar" on the add-on's Info page — see DOCS.md).
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:image-plus
+panel_title: "Frame Photos"
 
 map:
   - type: share

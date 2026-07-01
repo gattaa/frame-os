@@ -38,14 +38,6 @@ sync_file() {
 sync_file pipeline frame-pipeline processor.py
 sync_file uploader  frame-uploader app.py
 
-# The Lovelace card isn't part of the uploader add-on's Docker build context
-# (it's a frontend resource, not container code), but it ships alongside the
-# add-on folder for a convenient single copy-paste install. See
-# frame-uploader/DOCS.md for where it needs to be dropped in Home Assistant.
-mkdir -p "$ADDONS/frame-uploader/lovelace"
-cp "$ROOT/uploader/lovelace/frame-os-upload-card.js" "$ADDONS/frame-uploader/lovelace/frame-os-upload-card.js"
-echo "synced uploader/lovelace/frame-os-upload-card.js -> haos-addons/frame-uploader/lovelace/"
-
 echo ""
 echo "Done. If any synced file changed, bump 'version' in that add-on's"
 echo "config.yaml so the Supervisor rebuilds it on the next Store reload."

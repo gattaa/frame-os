@@ -95,7 +95,7 @@ This is the central design rule. Keep these boundaries clean:
 frame-os/
 ├── frame/      # the PWA (Vite + TS) — the display. READ-ONLY consumer.
 ├── pipeline/   # the processor + a mock-data generator. ONLY writer of photos/+manifest.
-├── uploader/   # FastAPI sidecar + custom Lovelace upload card (the ingest channel)
+├── uploader/   # FastAPI sidecar + self-served upload page (the ingest channel)
 ├── ha/         # Home Assistant YAML snippets (dashboards, sensors, automations)
 └── data/       # runtime data (gitignored contents)
     ├── incoming/   # channels drop raw files here
@@ -110,8 +110,9 @@ frame-os/
 - **pipeline/** — the channel-agnostic **processor** (sole writer of
   `photos/` + `manifest.json`) plus a **mock-data generator** for developing
   the frame without real ingest.
-- **uploader/** — a **FastAPI** sidecar and a **custom Lovelace upload card** so
-  photos can be added from the HA dashboard. It is just an ingest channel: it
+- **uploader/** — a **FastAPI** sidecar that serves its own upload page
+  (reached via HA Ingress, typically pinned as a sidebar panel) so photos can
+  be added straight from Home Assistant. It is just an ingest channel: it
   writes only into `data/incoming/`. It's the sole ingest channel today
   (`channel: "ha"`), but the contract is channel-agnostic — nothing stops a
   future channel being added in its own folder without touching this one.
