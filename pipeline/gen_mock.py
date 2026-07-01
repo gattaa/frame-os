@@ -5,8 +5,8 @@ Produces, under data/:
   - photos/<id>.jpg   : 6 labeled 1280x800 placeholder photos
   - manifest.json     : a valid manifest pointing at them
   - mock-entities.json : fake Home Assistant values (battery %, battery
-                         charge/discharge status, house power draw, an
-                         AC climate entity, and a weather entity)
+                         charge/discharge status, house power draw, 4
+                         AC climate entities, and a weather entity)
 
 These outputs are written exactly the way the real processor writes them, so
 the PWA cannot tell mock data from the real thing.
@@ -157,28 +157,75 @@ def mock_entities() -> dict:
             "entity_id": "weather.forecast_home",
             "state": weather_state,
             "friendly_name": "Home",
+            "attributes": {"temperature": 27},
         },
         "night_mode": {
             "entity_id": "input_boolean.frame_night_mode",
             "state": "off",  # flip to "on" to preview the dark night theme
             "friendly_name": "Frame Night Mode",
         },
-        "ac": {
-            "entity_id": "climate.living_room",
-            "state": "cool",
-            "attributes": {
-                "friendly_name": "Sala AC",
-                "current_temperature": 24.5,
-                "temperature": 22.0,
-                "min_temp": 16,
-                "max_temp": 30,
-                "target_temp_step": 0.5,
-                "hvac_modes": ["off", "cool", "heat", "fan_only", "dry"],
-                "hvac_action": "cooling",
-                "fan_mode": "auto",
-                "fan_modes": ["auto", "low", "medium low", "medium", "medium high", "high"],
+        "acs": [
+            {
+                "entity_id": "climate.camera",
+                "state": "off",
+                "attributes": {
+                    "friendly_name": "Camera",
+                    "current_temperature": 25.0,
+                    "temperature": None,
+                    "min_temp": 16,
+                    "max_temp": 30,
+                    "target_temp_step": 0.5,
+                    "hvac_modes": ["off", "cool", "heat"],
+                    "fan_mode": None,
+                    "fan_modes": ["auto", "low", "medium", "high"],
+                },
             },
-        },
+            {
+                "entity_id": "climate.attico",
+                "state": "heat",
+                "attributes": {
+                    "friendly_name": "Attico",
+                    "current_temperature": 20.5,
+                    "temperature": 22.0,
+                    "min_temp": 16,
+                    "max_temp": 30,
+                    "target_temp_step": 0.5,
+                    "hvac_modes": ["off", "cool", "heat"],
+                    "fan_mode": "medium",
+                    "fan_modes": ["auto", "low", "medium", "high"],
+                },
+            },
+            {
+                "entity_id": "climate.sala",
+                "state": "cool",
+                "attributes": {
+                    "friendly_name": "Sala",
+                    "current_temperature": 33.0,
+                    "temperature": 24.0,
+                    "min_temp": 16,
+                    "max_temp": 30,
+                    "target_temp_step": 0.5,
+                    "hvac_modes": ["off", "cool", "heat", "fan_only", "dry"],
+                    "fan_mode": "medium",
+                    "fan_modes": ["auto", "low", "medium low", "medium", "medium high", "high"],
+                },
+            },
+            {
+                "entity_id": "climate.richelieu",
+                "state": "cool",
+                "attributes": {
+                    "friendly_name": "Richelieu",
+                    "current_temperature": 27.5,
+                    "temperature": 26.0,
+                    "min_temp": 16,
+                    "max_temp": 30,
+                    "target_temp_step": 0.5,
+                    "hvac_modes": ["off", "cool", "heat"],
+                    "fan_mode": "auto",
+                    "fan_modes": ["auto", "low", "medium", "high"],
+                },
+            },
+        ],
     }
 
 

@@ -1,9 +1,11 @@
 # frame/ — the PWA (display)
 
 The fullscreen Progressive Web App that runs on the AGFAPHOTO frame via Fully
-Kiosk: a photo **slideshow** with a **control-center overlay** (clock, home
-battery % + charge/discharge status, house power draw, AC controls) sourced
-from Home Assistant.
+Kiosk: a photo **slideshow** with a **control-center overlay** (clock, weather,
+home battery % + charge/discharge status, house power draw, one AC badge per
+room) sourced from Home Assistant. The overlay is transparent and dims to a
+subtle resting state when idle, waking to full opacity on touch, so it never
+competes with the photo.
 
 **Role in the architecture contract:** READ-ONLY consumer. It only reads
 `../data/photos/` and `../data/manifest.json`, and Home Assistant for live
@@ -38,8 +40,8 @@ support, so it loads the **nomodule legacy bundle**.
   - (Vite prints "plugin-legacy overrode 'build.target'" — expected; the plugin
     owns the legacy target. The legacy bundle is verified to contain no
     untranspiled `?.`/`??`.)
-- **`backdrop-filter` is not used as a load-bearing style.** The overlay bar is
-  a solid semi-opaque fill; blur is added only behind an
+- **`backdrop-filter` is not used as a load-bearing style.** The AC badges/panel
+  use a solid semi-opaque fill; blur is added only behind an
   `@supports (backdrop-filter: …)` guard and the UI is legible without it.
 - **Light theme default** (matches the white bezel) + a **dark night theme**
   via `[data-theme]`, switched by `theme.ts` off HA's
@@ -50,11 +52,12 @@ support, so it loads the **nomodule legacy bundle**.
 
 | File | Responsibility |
 |------|----------------|
-| `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `BATTERY_STATUS`, `HOUSE_POWER`, `CLIMATE_AC`), HA base URL + token (loaded at runtime, see below), Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths, behaviour tunables. |
+| `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `BATTERY_STATUS`, `HOUSE_POWER`, `CLIMATES` — one or more `climate.*` entities), HA base URL + token (loaded at runtime, see below), Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths, behaviour tunables. |
 | `src/photos.ts` | Reads `manifest.json`, preloads, crossfades every ~12s, `object-fit:cover`, optional Ken Burns (toggle with **k** in dev), ordered by `ts`, with a sender chip + caption. |
 | `src/data.ts` | Subscribes to HA entities via `home-assistant-js-websocket`; mirrors every update to IndexedDB; falls back to last-known on disconnect / offline / mock and flags it **stale**. Never crashes on missing entities. |
 | `src/idb.ts` | Tiny promise-based IndexedDB key/value store (hand-written, no dep). |
-| `src/overlay.ts` | The control-center bar: clock/date, stats, AC `−`/`+`/mode (calls HA climate services). Auto-dims and nudges position to avoid retention. |
+| `src/format.ts` | Shared `D Mon` date formatting, used by both the clock and photo captions. |
+| `src/overlay.ts` | Transparent control-center overlay: clock/date/weather/battery/power top-right, one tappable badge per AC room top-left (tap to expand a setpoint/mode/fan panel, calls HA climate services). Wakes to full opacity on touch, dims again after inactivity. |
 | `src/theme.ts` | `startTheme()` — light/dark driven by HA `input_boolean.frame_night_mode` (via the data layer). Optionally nudges PWA brightness on transitions. |
 | `src/brightness.ts` | `setBrightness(0–255)` / `setScreenOn(bool)` → Fully Kiosk REST. Gated by config so it no-ops in desktop dev. |
 | `src/main.ts` | Boot + service-worker registration. |

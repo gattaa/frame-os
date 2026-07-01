@@ -43,8 +43,13 @@ export const ENTITIES = {
   BATTERY_PCT: "__mock_battery__",
   BATTERY_STATUS: "__mock_battery_status__",
   HOUSE_POWER: "__mock_house_power__",
-  CLIMATE_AC: "__mock_climate__",
   WEATHER: "__mock_weather__",
+  /**
+   * One or more `climate.*` entities, one badge each in the overlay. Empty
+   * until loadRuntimeConfig() resolves (or in mock mode, where mock-entities.json
+   * supplies its own entity_id per room — see data.ts).
+   */
+  CLIMATES: [] as string[],
   /**
    * Single source of truth for day/night — an HA input_boolean driven by the
    * ha/ package (sun elevation + override). The PWA reads this for its theme
@@ -62,9 +67,9 @@ export function getSubscribedEntityIds(): string[] {
     ENTITIES.BATTERY_PCT,
     ENTITIES.BATTERY_STATUS,
     ENTITIES.HOUSE_POWER,
-    ENTITIES.CLIMATE_AC,
     ENTITIES.WEATHER,
     ENTITIES.NIGHT_MODE,
+    ...ENTITIES.CLIMATES,
   ];
 }
 
@@ -84,7 +89,7 @@ interface RuntimeHaConfig {
     battery: string;
     batteryStatus: string;
     housePower: string;
-    climate: string;
+    climates: string[];
     weather: string;
   };
 }
@@ -111,7 +116,7 @@ export async function loadRuntimeConfig(): Promise<void> {
       ENTITIES.BATTERY_PCT = cfg.entities.battery || ENTITIES.BATTERY_PCT;
       ENTITIES.BATTERY_STATUS = cfg.entities.batteryStatus || ENTITIES.BATTERY_STATUS;
       ENTITIES.HOUSE_POWER = cfg.entities.housePower || ENTITIES.HOUSE_POWER;
-      ENTITIES.CLIMATE_AC = cfg.entities.climate || ENTITIES.CLIMATE_AC;
+      ENTITIES.CLIMATES = Array.isArray(cfg.entities.climates) ? cfg.entities.climates : ENTITIES.CLIMATES;
       ENTITIES.WEATHER = cfg.entities.weather || ENTITIES.WEATHER;
     }
   } catch (err) {
@@ -160,11 +165,9 @@ export const SLIDESHOW = {
 } as const;
 
 export const OVERLAY = {
-  /** Dim the bar this long after the last touch, to avoid OLED retention. */
+  /** Fade the overlay to its dim resting state this long after the last touch;
+   *  a touch anywhere brings it back to full opacity. */
   DIM_AFTER_MS: 8_000,
-  DIM_OPACITY: 0.16,
-  /** Nudge the bar a few px on this cadence so it never burns a fixed spot. */
-  NUDGE_EVERY_MS: 90_000,
 } as const;
 
 /**

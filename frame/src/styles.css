@@ -3,38 +3,38 @@
  *
  * Constraints (see ../CLAUDE.md):
  *  - Target ~Chrome 60: CSS custom properties, flexbox, object-fit are fine.
- *  - backdrop-filter is NOT safe -> the overlay bar is a solid semi-opaque
- *    fill by default; blur is added only behind an @supports guard and the UI
- *    must read correctly without it.
+ *  - backdrop-filter is NOT safe -> badges/panel use a solid semi-opaque fill
+ *    by default; blur is added only behind an @supports guard and the UI must
+ *    read correctly without it.
  *  - Light theme default (white bezel); dark "night" theme via [data-theme].
+ *
+ * The overlay itself (clock/date/weather/battery/power + AC badges) sits
+ * directly over the photo — legible via text-shadow, not a background bar —
+ * and is hidden until touched (see overlay.ts). The badge/panel surfaces are
+ * the only pieces with their own background, since they need contrast
+ * regardless of what photo is behind them.
  */
 
 :root {
-  /* Light theme (default). */
+  /* Light theme (default) — mostly unused by the overlay now (it reads white
+     text over photos regardless of theme) but still drives chrome like
+     theme-color and the stale dot. */
   --bg: #11131a;
-  --bar-bg: rgba(248, 249, 251, 0.86);
-  --bar-fg: #1b1e27;
-  --bar-sub: #5b6170;
-  --bar-line: rgba(0, 0, 0, 0.08);
-  --accent: #2f6fed;
-  --btn-bg: rgba(0, 0, 0, 0.05);
-  --btn-fg: #1b1e27;
-  --chip-bg: rgba(0, 0, 0, 0.55);
-  --chip-fg: #f6f7f9;
   --stale: #e0a106;
+  --panel-fg: #fff;
+  --panel-sub: rgba(255, 255, 255, 0.55);
+  --panel-bg: rgba(24, 26, 31, 0.72);
+  --panel-line: rgba(255, 255, 255, 0.14);
+  --badge-bg: rgba(255, 255, 255, 0.16);
+  --badge-bg-selected: rgba(255, 255, 255, 0.28);
+  --badge-line: rgba(255, 255, 255, 0.18);
+  --badge-line-selected: rgba(255, 255, 255, 0.42);
+  --flame: #e8a066;
+  --ice: #8fc7e8;
 }
 
 :root[data-theme="dark"] {
   --bg: #000000;
-  --bar-bg: rgba(16, 18, 24, 0.82);
-  --bar-fg: #e7e9ef;
-  --bar-sub: #98a0b3;
-  --bar-line: rgba(255, 255, 255, 0.08);
-  --accent: #5b8bff;
-  --btn-bg: rgba(255, 255, 255, 0.08);
-  --btn-fg: #e7e9ef;
-  --chip-bg: rgba(0, 0, 0, 0.6);
-  --chip-fg: #f6f7f9;
   --stale: #f0b323;
 }
 
@@ -92,275 +92,360 @@ html, body {
 
 #photo-meta {
   position: absolute;
-  left: 20px;
-  bottom: 18px;
+  left: 40px;
+  bottom: 36px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 70%;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 640px;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
   z-index: 2;
 }
-#sender-chip {
-  background: var(--chip-bg);
-  color: var(--chip-fg);
-  font-size: 15px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-#sender-chip:empty { display: none; }
 #caption {
-  background: var(--chip-bg);
-  color: var(--chip-fg);
-  font-size: 15px;
-  padding: 4px 12px;
-  border-radius: 12px;
+  font-size: 32px;
+  font-weight: 500;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 #caption:empty { display: none; }
+#sender-chip {
+  margin-top: 4px;
+  font-size: 19px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}
+#sender-chip:empty { display: none; }
 
-/* --- Control-center overlay ----------------------------------------------- */
+/* --- Control-center overlay -------------------------------------------------
+ * Transparent over the photo; legible via text-shadow. The top-right info
+ * (clock/date/weather/battery/power) stays fully visible at all times; only
+ * the AC badges/panel fade to a dim (but still legible) resting state after a
+ * period of inactivity, waking to full opacity on touch — see overlay.ts. */
 
 .overlay {
   position: fixed;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: stretch;
-  gap: 26px;
-  padding: 14px 22px;
-  border-radius: 18px;
-  /* Solid, semi-opaque fill — legible WITHOUT any blur. */
-  background: var(--bar-bg);
-  color: var(--bar-fg);
-  border: 1px solid var(--bar-line);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  inset: 0;
   z-index: 10;
-  transition: opacity 600ms ease, transform 1200ms ease;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.ov-badges {
   opacity: 1;
+  transition: opacity 500ms ease;
+}
+.overlay.ov-dim .ov-badges {
+  opacity: 0.35;
 }
 
-/* Progressive enhancement ONLY: blur if the engine truly supports it. */
-@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
-  .overlay {
-    background: var(--bar-bg);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-  }
-}
-
-.overlay.dim {
-  opacity: var(--ov-dim, 0.16);
-}
-
-.ov-section {
+.ov-row {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.ov-section + .ov-section {
-  border-left: 1px solid var(--bar-line);
-  padding-left: 26px;
-}
-
-.ov-group {
-  flex-direction: row;
+  justify-content: flex-end;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
 }
 
-.ov-time #clock {
-  font-size: 40px;
-  font-weight: 700;
+.ov-icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  flex-shrink: 0;
+}
+.ov-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Top-right: clock / date+weather / battery+power. */
+.ov-info {
+  position: absolute;
+  top: 36px;
+  right: 40px;
+  text-align: right;
+}
+.ov-clock {
+  font-size: 88px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.5px;
+  letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
 }
-.ov-time #date {
-  margin-top: 4px;
-  font-size: 15px;
-  color: var(--bar-sub);
+.ov-dateweather {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 500;
 }
-
 .ov-weather {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .ov-weather.hidden {
   display: none;
 }
-.weather-icon {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  color: var(--bar-fg);
+.ov-ministats {
+  margin-top: 10px;
+  gap: 18px;
+  font-size: 20px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
 }
-.weather-icon svg {
+.ov-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.ov-stat .ov-icon {
+  width: 20px;
+  height: 20px;
+}
+.battery-status:not(:empty) {
+  margin-left: 2px;
+}
+
+/* Top-left: one badge per AC room + its expand panel. Badges/panel get their
+ * own solid background since (unlike the text above) they need contrast
+ * against any photo, not just a drop-shadow. */
+.ov-badges {
+  position: absolute;
+  top: 36px;
+  left: 40px;
+  display: flex;
+  gap: 12px;
+  text-shadow: none;
+}
+
+.ac-badge {
+  width: 96px;
+  padding: 11px 8px;
+  border-radius: 16px;
+  background: var(--badge-bg);
+  border: 1px solid var(--badge-line);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .ac-badge {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+.ac-badge.selected {
+  background: var(--badge-bg-selected);
+  border-color: var(--badge-line-selected);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.ac-badge-iconrow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ac-badge-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  color: rgba(255, 255, 255, 0.55);
+}
+.ac-badge-icon svg {
   width: 100%;
   height: 100%;
 }
-.weather-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--bar-sub);
-  white-space: nowrap;
-}
-
-.ov-stats {
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
-}
-.stat {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 8px;
-}
-.stat-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--bar-sub);
-  min-width: 52px;
-}
-.stat-value {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.1;
-}
-.stat-value .unit {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--bar-sub);
-  margin-left: 2px;
-}
-.battery-icon {
+.ac-badge-icon-heat { color: var(--flame); }
+.ac-badge-icon-cool { color: var(--ice); }
+.ac-badge-temp {
   font-size: 15px;
-  margin-left: 4px;
-  color: var(--bar-sub);
-}
-.battery-icon:not(:empty) {
-  color: var(--accent);
-}
-
-.ov-ac {
-  gap: 8px;
-  min-width: 220px;
-}
-.ac-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ac-row-top {
-  justify-content: space-between;
-}
-.ac-name {
-  font-size: 15px;
-  font-weight: 600;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.ac-current {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--bar-sub);
-}
-.ac-off-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: none;
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.ac-off-btn:active { background: var(--accent); color: #fff; }
-
-.ac-row-modes {
-  gap: 10px;
-}
-.ac-mode-btn {
-  flex: 1;
-  height: 44px;
-  border-radius: 12px;
-  border: none;
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.ac-mode-btn:active { background: var(--accent); color: #fff; }
-.ac-mode-btn:disabled {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-.ac-row-fan {
-  gap: 6px;
-}
-.ac-fan-btn {
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border-radius: 8px;
-  border: none;
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  font-size: 18px;
   font-weight: 700;
-  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ac-badge-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ac-badge.selected .ac-badge-name {
+  color: #fff;
+}
+
+/* Expand panel: positioned under whichever badge is selected (overlay.ts sets
+ * `left` to that badge's offset). */
+.ac-panel {
+  position: absolute;
+  top: 88px;
+  width: 280px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-line);
+  border-radius: 20px;
+  padding: 20px 22px;
+  color: var(--panel-fg);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  display: none;
+}
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .ac-panel {
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+}
+.ac-panel.open {
+  display: block;
+}
+
+.ac-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.ac-panel-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+#ac-panel-name {
+  font-size: 18px;
+  font-weight: 600;
+}
+.ac-panel-ambient {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--panel-sub);
+}
+.ac-panel-collapse {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
 }
-.ac-fan-btn:active { background: var(--accent); color: #fff; }
-
-.ac-fan-scale {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 4px;
-  height: 30px;
+.ac-panel-collapse svg {
+  width: 20px;
+  height: 20px;
 }
-.fan-tick {
+
+.ac-panel-setpoint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+.ac-panel-step {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ac-panel-step:active {
+  background: rgba(255, 255, 255, 0.24);
+}
+.ac-panel-target {
+  min-width: 96px;
+  font-size: 46px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.ac-panel-label {
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--panel-sub);
+}
+.ac-panel-segmented,
+.ac-panel-fan {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 16px;
+}
+.ac-panel-fan {
+  align-items: flex-end;
+  height: 44px;
+  margin-bottom: 0;
+}
+.ac-seg-btn {
   flex: 1;
+  padding: 8px 0;
+  border-radius: 9px;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ac-seg-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.ac-seg-btn.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.ac-seg-btn.ac-seg-cool.active { color: var(--ice); }
+.ac-seg-btn.ac-seg-heat.active { color: var(--flame); }
+
+.ac-fan-tick {
+  flex: 1;
+  align-self: flex-end;
   height: var(--tick-h, 40%);
   min-width: 14px;
   border-radius: 4px;
   border: none;
-  background: var(--btn-bg);
+  background: rgba(255, 255, 255, 0.14);
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
 }
-.fan-tick.active {
-  background: var(--accent);
-}
-.fan-tick:active {
-  background: var(--accent);
+.ac-fan-tick.active {
+  background: #fff;
 }
 
-/* Stale dot: subtle amber when showing last-known values. */
-.stale-dot {
-  position: absolute;
+/* Stale dot: outside #overlay so it stays visible (dim, not gone) even while
+ * the overlay is hidden — the one thing worth a glance without touching. */
+#stale-dot {
+  position: fixed;
   top: 8px;
   right: 8px;
   width: 8px;
@@ -369,5 +454,8 @@ html, body {
   background: var(--stale);
   opacity: 0;
   transition: opacity 400ms ease;
+  z-index: 11;
 }
-.stale-dot.on { opacity: 0.9; }
+#stale-dot.on {
+  opacity: 0.9;
+}

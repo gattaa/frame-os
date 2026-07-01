@@ -8,6 +8,7 @@
  */
 
 import { PATHS, SLIDESHOW } from "./config";
+import { formatShortDate } from "./format";
 
 interface ManifestEntry {
   id: string;
@@ -75,11 +76,14 @@ async function show(entry: ManifestEntry): Promise<void> {
     back.src = url;
     applyKenBurns(back);
 
-    // Update caption/chip for the incoming photo.
+    // Update caption/chip for the incoming photo. The chip line is
+    // "uploader · D Mon" (either half optional); the caption is the message.
     const chip = chipEl();
     const cap = captionEl();
     const meta = metaEl();
-    if (chip) chip.textContent = entry.uploader || "";
+    const ts = new Date(entry.ts);
+    const dateStr = Number.isNaN(ts.getTime()) ? "" : formatShortDate(ts);
+    if (chip) chip.textContent = [entry.uploader, dateStr].filter(Boolean).join(" · ");
     if (cap) cap.textContent = entry.caption || "";
     if (meta) meta.style.display = entry.uploader || entry.caption ? "flex" : "none";
 

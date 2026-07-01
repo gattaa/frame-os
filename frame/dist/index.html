@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en" data-theme="light">
   <head>
-    <script type="module" crossorigin src="/local/frame/assets/polyfills-BuU8V1U6.js"></script>
+    <script type="module" crossorigin src="/local/frame/assets/polyfills-_2OOkclV.js"></script>
 
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -10,8 +10,8 @@
     <link rel="apple-touch-icon" href="/local/frame/icons/icon-192.png" />
     <link rel="manifest" href="/local/frame/manifest.webmanifest" />
     <title>frame-os</title>
-    <script type="module" crossorigin src="/local/frame/assets/index-lYo6ixwZ.js"></script>
-    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-CIB5K3uD.css">
+    <script type="module" crossorigin src="/local/frame/assets/index-CUoWhVvl.js"></script>
+    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-DpAIdKfN.css">
     <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();if(location.protocol!="file:"){window.__vite_is_modern_browser=true}</script>
     <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
   </head>
@@ -26,67 +26,48 @@
       </div>
     </div>
 
-    <!-- Control-center overlay: solid semi-opaque bar (blur is enhancement). -->
-    <div id="overlay" class="overlay">
-      <div class="ov-section ov-group">
-        <div class="ov-time">
-          <div id="clock">--:--</div>
-          <div id="date"></div>
+    <!-- Control-center overlay: transparent over the photo, dims after inactivity
+         and wakes on touch (see overlay.ts). Text/icons use drop-shadow for
+         legibility; badges and the expand panel fall back to a solid
+         semi-opaque fill (blur is enhancement). -->
+    <div id="overlay" class="overlay ov-dim">
+      <div class="ov-info">
+        <div id="clock" class="ov-clock">--:--</div>
+        <div class="ov-row ov-dateweather">
+          <span id="date"></span>
+          <span id="ov-weather" class="ov-weather hidden">
+            <span id="weather-icon" class="ov-icon" aria-hidden="true"></span><span id="weather-temp"></span>
+          </span>
         </div>
-        <div id="ov-weather" class="ov-weather hidden">
-          <span id="weather-icon" class="weather-icon" aria-hidden="true"></span>
-          <span id="weather-label" class="weather-label"></span>
-        </div>
-      </div>
-      <div class="ov-section ov-stats">
-        <div class="stat">
-          <span class="stat-label">Battery</span>
-          <span class="stat-value"><span id="battery">--</span><span class="unit">%</span><span id="battery-icon" class="battery-icon" aria-hidden="true"></span></span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">House</span>
-          <span class="stat-value" id="house-power">--</span>
-        </div>
-      </div>
-      <div class="ov-section ov-ac">
-        <div class="ac-row ac-row-top">
-          <span class="ac-name"><span id="ac-name">AC</span> <span id="ac-current" class="ac-current">--&deg;</span></span>
-          <button id="ac-off" class="ac-off-btn" aria-label="Turn off">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v8" />
-              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6.3 6.3a9 9 0 1 0 11.4 0" />
-            </svg>
-          </button>
-        </div>
-        <div class="ac-row ac-row-modes">
-          <button id="ac-heat" class="ac-mode-btn" aria-label="Riscalda">
-            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-              <path fill="currentColor"
-                d="M12 2c-.6 3-3 4.7-3 8a3 3 0 0 0 6 0c0-1-.4-1.8-1-2.5.1 1-.2 1.8-.9 2.3-.8.6-1.9.3-2.1-.7-.3-1.4.6-2.5 1.3-3.6.7-1.1 1.1-2.1.7-3.5zM12 15a5 5 0 0 0 5-5c0-.7-.1-1.3-.3-1.9C18.6 9.3 20 11.6 20 14a8 8 0 1 1-16 0c0-3.4 2.2-6.2 4.3-8.4C7.4 7.1 7 8.5 7 10a5 5 0 0 0 5 5z" />
-            </svg>
-          </button>
-          <button id="ac-cool" class="ac-mode-btn" aria-label="Raffredda">
-            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-              <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11" />
-                <path d="M12 2l-2 2M12 2l2 2M12 22l-2-2M12 22l2-2" />
-                <path d="M4.5 6.5l.5 2.7M4.5 6.5l2.7-.5M19.5 17.5l-.5-2.7M19.5 17.5l-2.7.5" />
-                <path d="M19.5 6.5l-.5 2.7M19.5 6.5l-2.7-.5M4.5 17.5l.5-2.7M4.5 17.5l2.7.5" />
-              </g>
-            </svg>
-          </button>
-        </div>
-        <div class="ac-row ac-row-fan">
-          <button id="fan-down" class="ac-fan-btn" aria-label="Lower fan speed">&minus;</button>
-          <div id="fan-scale" class="ac-fan-scale"></div>
-          <button id="fan-up" class="ac-fan-btn" aria-label="Raise fan speed">&plus;</button>
+        <div class="ov-row ov-ministats">
+          <span class="ov-stat">
+            <span class="ov-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+                <rect x="21" y="10" width="2" height="4" rx="1" fill="currentColor" />
+              </svg>
+            </span>
+            <span id="battery">--</span><span class="unit">%</span><span id="battery-status" class="battery-status"></span>
+          </span>
+          <span class="ov-stat">
+            <span class="ov-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 11l8-7 8 7" />
+                <path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M6 10v9h12v-9" />
+              </svg>
+            </span>
+            <span id="house-power">--</span>
+          </span>
         </div>
       </div>
-      <span id="stale-dot" class="stale-dot" title="Showing last-known values"></span>
+
+      <div class="ov-badges" id="ac-badges"></div>
     </div>
 
+    <span id="stale-dot" class="stale-dot" title="Showing last-known values"></span>
+
     <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
-    <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-VUC_-6qy.js"></script>
-    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-DxAx85wM.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+    <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-c8e_mEc0.js"></script>
+    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-e-D6Vgas.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
   </body>
 </html>
