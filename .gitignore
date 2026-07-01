@@ -36,7 +36,7 @@ data/mock-entities.json
 
 # ---- Node / Vite (frame/) ----
 node_modules/
-dist/
+# dist/ UN-GITIGNORED
 .vite/
 *.local
 .eslintcache

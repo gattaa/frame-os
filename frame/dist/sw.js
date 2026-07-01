@@ -20,12 +20,14 @@ var PHOTO_CACHE = "frame-os-photos-" + VERSION;
 var DATA_CACHE = "frame-os-data-" + VERSION;
 var KEEP = [SHELL_CACHE, ASSET_CACHE, PHOTO_CACHE, DATA_CACHE];
 
-var SHELL = ["/", "/index.html", "/manifest.webmanifest"];
-
+// The scope is wherever this file is served from (e.g. "/local/frame/" in
+// prod, "/" in dev) — never hardcode domain-root paths here.
 self.addEventListener("install", function (event) {
+  var scope = self.registration.scope;
+  var shell = [scope, scope + "index.html", scope + "manifest.webmanifest"];
   event.waitUntil(
     caches.open(SHELL_CACHE).then(function (cache) {
-      return cache.addAll(SHELL);
+      return cache.addAll(shell);
     }).then(function () {
       return self.skipWaiting();
     })
@@ -117,7 +119,7 @@ self.addEventListener("fetch", function (event) {
 
   // Navigation: keep the shell fresh, but survive offline reloads.
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, SHELL_CACHE, "/index.html"));
+    event.respondWith(networkFirst(request, SHELL_CACHE, self.registration.scope + "index.html"));
     return;
   }
 

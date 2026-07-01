@@ -20,7 +20,7 @@ function registerServiceWorker(): void {
   // (modules are served unbundled there and a precache list would be wrong).
   if (DEV) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err) => {
       console.warn("[sw] registration failed", err);
     });
   });

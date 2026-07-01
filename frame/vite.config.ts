@@ -12,8 +12,9 @@ import { extname, join, normalize } from "node:path";
  * On the real frame this path is served by whatever hosts the build; in dev we
  * fake it here.
  */
-function serveData(): Plugin {
+function serveData(base: string): Plugin {
   const dataRoot = normalize(join(__dirname, "..", "data"));
+  const prefix = `${base}data/`;
   const types: Record<string, string> = {
     ".json": "application/json",
     ".jpg": "image/jpeg",
@@ -23,9 +24,9 @@ function serveData(): Plugin {
   };
   const middleware: Connect.NextHandleFunction = (req, res, next) => {
     const url = (req.url || "").split("?")[0];
-    if (!url.startsWith("/data/")) return next();
+    if (!url.startsWith(prefix)) return next();
     // Resolve safely inside dataRoot (block path traversal).
-    const rel = decodeURIComponent(url.slice("/data/".length));
+    const rel = decodeURIComponent(url.slice(prefix.length));
     const abs = normalize(join(dataRoot, rel));
     if (!abs.startsWith(dataRoot) || !existsSync(abs) || !statSync(abs).isFile()) {
       res.statusCode = 404;
@@ -47,8 +48,13 @@ function serveData(): Plugin {
   };
 }
 
+// Served from Home Assistant's /local/frame/ path (config/www/frame/), not
+// domain root — every built asset and runtime fetch must be prefixed to match.
+const BASE = "/local/frame/";
+
 // https://vite.dev/config/
 export default defineConfig({
+  base: BASE,
   // The frame's WebView is ~Chrome 60. The modern build floors at chrome61;
   // the legacy plugin below emits a fully-transpiled nomodule bundle for the
   // real device (Chrome 60 has no <script type=module> support).
@@ -57,7 +63,7 @@ export default defineConfig({
     cssTarget: "chrome61",
   },
   plugins: [
-    serveData(),
+    serveData(BASE),
     legacy({
       targets: ["chrome >= 60"],
       // Polyfill modern JS for the ancient WebView.
