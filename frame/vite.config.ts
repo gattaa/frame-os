@@ -5,16 +5,21 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 /**
- * Serve the repo's ../data directory at /data/* during `vite dev` and
+ * Serve the repo's ../data directory at <base>/* during `vite dev` and
  * `vite preview`, so the PWA can read the pipeline's manifest.json,
  * mock-entities.json, and photos/ without a separate file server.
  *
- * On the real frame this path is served by whatever hosts the build; in dev we
- * fake it here.
+ * This mirrors prod exactly: the frame-uploader add-on writes those files
+ * straight into config/www/frame/ (served by HA at /local/frame/), with no
+ * data/ subfolder — so this middleware forwards from the same base, not a
+ * data/ prefix under it.
  */
 function serveData(base: string): Plugin {
   const dataRoot = normalize(join(__dirname, "..", "data"));
-  const prefix = `${base}data/`;
+  const prefix = base;
+  // Only these live under dataRoot; everything else under base is a real
+  // built asset (JS bundles, icons, sw.js) and must fall through to Vite.
+  const dataPaths = ["manifest.json", "mock-entities.json", "photos/"];
   const types: Record<string, string> = {
     ".json": "application/json",
     ".jpg": "image/jpeg",
@@ -25,9 +30,10 @@ function serveData(base: string): Plugin {
   const middleware: Connect.NextHandleFunction = (req, res, next) => {
     const url = (req.url || "").split("?")[0];
     if (!url.startsWith(prefix)) return next();
+    const rel = url.slice(prefix.length);
+    if (!dataPaths.some((p) => rel === p || rel.startsWith(p))) return next();
     // Resolve safely inside dataRoot (block path traversal).
-    const rel = decodeURIComponent(url.slice(prefix.length));
-    const abs = normalize(join(dataRoot, rel));
+    const abs = normalize(join(dataRoot, decodeURIComponent(rel)));
     if (!abs.startsWith(dataRoot) || !existsSync(abs) || !statSync(abs).isFile()) {
       res.statusCode = 404;
       res.end("not found");

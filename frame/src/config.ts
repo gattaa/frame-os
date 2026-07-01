@@ -125,9 +125,12 @@ export const FULLY_KIOSK = {
   PASSWORD: str("VITE_FULLY_PASSWORD", ""),
 } as const;
 
-// --- Data paths (served at <base>data/* in dev, preview & prod; see
-// vite.config.ts) ------------------------------------------------------------
-
+// --- Data paths (served at <base>* directly; see vite.config.ts) -----------
+// The frame-uploader add-on writes manifest.json/photos/ straight into
+// config/www/frame/ (no data/ subfolder), served by HA at /local/frame/.
+// serveData in vite.config.ts mirrors that layout for dev/preview by
+// forwarding requests straight through to the pipeline's ../data directory.
+//
 // import.meta.env.BASE_URL always has a trailing slash (Vite guarantees this),
 // so these defaults resolve correctly whether the app is served from domain
 // root (dev) or from HA's /local/frame/ (prod). Override via env for anything
@@ -135,9 +138,9 @@ export const FULLY_KIOSK = {
 const BASE_URL = import.meta.env.BASE_URL;
 
 export const PATHS = {
-  MANIFEST: str("VITE_MANIFEST_URL", `${BASE_URL}data/manifest.json`),
-  PHOTOS_BASE: str("VITE_PHOTOS_BASE", `${BASE_URL}data/photos`),
-  MOCK_ENTITIES: str("VITE_MOCK_ENTITIES_URL", `${BASE_URL}data/mock-entities.json`),
+  MANIFEST: str("VITE_MANIFEST_URL", `${BASE_URL}manifest.json`),
+  PHOTOS_BASE: str("VITE_PHOTOS_BASE", `${BASE_URL}photos`),
+  MOCK_ENTITIES: str("VITE_MOCK_ENTITIES_URL", `${BASE_URL}mock-entities.json`),
 } as const;
 
 // --- Behaviour tunables -----------------------------------------------------
