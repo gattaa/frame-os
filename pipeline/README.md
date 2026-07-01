@@ -13,9 +13,9 @@ Produces under `../data/`:
 - `photos/<id>.jpg` — **6 labeled 1280×800** placeholder photos
 - `manifest.json` — a valid manifest pointing at them
 - `mock-entities.json` — fake Home Assistant values: **battery %**, **battery
-  charge/discharge status**, **house power draw**, and an **AC climate
-  entity** (shaped like real HA state objects, so the PWA's mapping code is
-  exercised the same way).
+  charge/discharge status**, **house power draw**, an **AC climate
+  entity**, and a **weather entity** (shaped like real HA state objects, so
+  the PWA's mapping code is exercised the same way).
 
 All of `data/`'s contents are gitignored; regenerate any time.
 

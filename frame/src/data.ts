@@ -20,6 +20,7 @@ import { idbGet, idbSet } from "./idb";
 
 export interface AcState {
   entityId: string;
+  name: string;
   mode: string;
   current: number | null;
   target: number | null;
@@ -27,6 +28,8 @@ export interface AcState {
   minTemp: number;
   maxTemp: number;
   step: number;
+  fanMode: string | null;
+  fanModes: string[];
 }
 
 export interface FrameState {
@@ -38,6 +41,8 @@ export interface FrameState {
   batteryStatus: string | null;
   housePower: number | null;
   ac: AcState | null;
+  /** Raw weather.* state (e.g. "sunny", "rainy"); null when unavailable/missing. */
+  weather: string | null;
   /** HA day/night source of truth; null when unknown. true = night. */
   nightMode: boolean | null;
   updatedAt: number;
@@ -52,6 +57,7 @@ const EMPTY: FrameState = {
   batteryStatus: null,
   housePower: null,
   ac: null,
+  weather: null,
   nightMode: null,
   updatedAt: 0,
   connected: false,
@@ -98,8 +104,10 @@ function acFromEntity(entityId: string, e: HassLike | undefined): AcState | null
   if (!e) return null;
   const a = e.attributes || {};
   const modes = Array.isArray(a["hvac_modes"]) ? (a["hvac_modes"] as string[]) : [];
+  const fanModes = Array.isArray(a["fan_modes"]) ? (a["fan_modes"] as string[]) : [];
   return {
     entityId,
+    name: typeof a["friendly_name"] === "string" ? a["friendly_name"] : "AC",
     mode: String(e.state),
     current: num(a["current_temperature"]),
     target: num(a["temperature"]),
@@ -107,6 +115,8 @@ function acFromEntity(entityId: string, e: HassLike | undefined): AcState | null
     minTemp: num(a["min_temp"]) ?? 16,
     maxTemp: num(a["max_temp"]) ?? 30,
     step: num(a["target_temp_step"]) ?? 0.5,
+    fanMode: typeof a["fan_mode"] === "string" ? a["fan_mode"] : null,
+    fanModes,
   };
 }
 
@@ -124,6 +134,14 @@ function nightFrom(night: HassLike | undefined): boolean | null {
   return current.nightMode; // unavailable / unknown -> hold last-known
 }
 
+/** Raw weather state, or null if the entity is missing/unavailable/unknown. */
+function weatherFrom(weather: HassLike | undefined): string | null {
+  if (!weather) return null;
+  const s = String(weather.state);
+  if (s === "unavailable" || s === "unknown") return null;
+  return s;
+}
+
 /** Build FrameState from a map of entity_id -> hass entity. */
 function fromEntityMap(map: Record<string, HassLike | undefined>): Partial<FrameState> {
   const battery = map[ENTITIES.BATTERY_PCT];
@@ -135,6 +153,7 @@ function fromEntityMap(map: Record<string, HassLike | undefined>): Partial<Frame
     batteryStatus: batteryStatus ? String(batteryStatus.state) : null,
     housePower: housePower ? num(housePower.state) : null,
     ac: acFromEntity(ENTITIES.CLIMATE_AC, ac),
+    weather: weatherFrom(map[ENTITIES.WEATHER]),
     nightMode: nightFrom(map[ENTITIES.NIGHT_MODE]),
     updatedAt: Date.now(),
     connected: true,
@@ -163,6 +182,7 @@ interface MockEntities {
   batteryStatus?: HassLike;
   housePower?: HassLike;
   ac?: HassLike;
+  weather?: HassLike;
   night_mode?: HassLike;
 }
 
@@ -176,6 +196,7 @@ async function pollMock(): Promise<void> {
       [ENTITIES.BATTERY_STATUS]: j.batteryStatus,
       [ENTITIES.HOUSE_POWER]: j.housePower,
       [ENTITIES.CLIMATE_AC]: j.ac,
+      [ENTITIES.WEATHER]: j.weather,
       [ENTITIES.NIGHT_MODE]: j.night_mode,
     };
     // The SW tags cache-served responses; that is the precise "showing
@@ -237,41 +258,72 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-/** Nudge the AC target by `delta` degrees (optimistic; persists locally). */
-export async function nudgeAcTarget(delta: number): Promise<void> {
-  const ac = current.ac;
-  if (!ac || ac.target === null) return;
-  const next = clamp(ac.target + delta, ac.minTemp, ac.maxTemp);
-  emit({ ac: { ...ac, target: next } });
-  void persist();
-
+async function callClimate(entityId: string, service: string,
+  data: Record<string, unknown>): Promise<void> {
   if (USE_MOCK || !conn) return; // dev/offline: optimistic only
   try {
     const haws = await getHaws();
-    await haws.callService(conn, "climate", "set_temperature",
-      { temperature: next }, { entity_id: ac.entityId });
+    await haws.callService(conn, "climate", service, data, { entity_id: entityId });
   } catch (err) {
-    console.error("[data] set_temperature failed", err);
+    console.error(`[data] ${service} failed`, err);
   }
 }
 
-/** Advance the AC to the next hvac mode (optimistic; persists locally). */
-export async function cycleAcMode(): Promise<void> {
+/**
+ * Flame button: heat + bump the setpoint 3° above current. Fires
+ * set_hvac_mode BEFORE set_temperature, awaited in sequence — some climate
+ * integrations validate/clamp the setpoint against the mode that's active
+ * *at the time the temperature call lands*, so sending the mode first avoids
+ * a brief window where the target is interpreted under the old mode.
+ */
+export async function acHeat(): Promise<void> {
   const ac = current.ac;
-  if (!ac || ac.hvacModes.length === 0) return;
-  const i = ac.hvacModes.indexOf(ac.mode);
-  const next = ac.hvacModes[(i + 1) % ac.hvacModes.length];
-  emit({ ac: { ...ac, mode: next } });
+  if (!ac || ac.current === null) return;
+  const target = clamp(ac.current + 3, ac.minTemp, ac.maxTemp);
+  emit({ ac: { ...ac, mode: "heat", target } });
   void persist();
+  await callClimate(ac.entityId, "set_hvac_mode", { hvac_mode: "heat" });
+  await callClimate(ac.entityId, "set_temperature", { temperature: target });
+}
 
-  if (USE_MOCK || !conn) return;
-  try {
-    const haws = await getHaws();
-    await haws.callService(conn, "climate", "set_hvac_mode",
-      { hvac_mode: next }, { entity_id: ac.entityId });
-  } catch (err) {
-    console.error("[data] set_hvac_mode failed", err);
-  }
+/** Ice button: cool + drop the setpoint 3° below current. Same call order as acHeat(). */
+export async function acCool(): Promise<void> {
+  const ac = current.ac;
+  if (!ac || ac.current === null) return;
+  const target = clamp(ac.current - 3, ac.minTemp, ac.maxTemp);
+  emit({ ac: { ...ac, mode: "cool", target } });
+  void persist();
+  await callClimate(ac.entityId, "set_hvac_mode", { hvac_mode: "cool" });
+  await callClimate(ac.entityId, "set_temperature", { temperature: target });
+}
+
+/** Off button: hvac_mode only — never touches temperature or fan_mode. */
+export async function acOff(): Promise<void> {
+  const ac = current.ac;
+  if (!ac) return;
+  emit({ ac: { ...ac, mode: "off" } });
+  void persist();
+  await callClimate(ac.entityId, "set_hvac_mode", { hvac_mode: "off" });
+}
+
+/** Set fan_mode directly (tapping a tick). Independent of hvac_mode/temperature. */
+export async function setAcFanMode(mode: string): Promise<void> {
+  const ac = current.ac;
+  if (!ac) return;
+  emit({ ac: { ...ac, fanMode: mode } });
+  void persist();
+  await callClimate(ac.entityId, "set_fan_mode", { fan_mode: mode });
+}
+
+/** Step fan_mode one position through the entity's fan_modes list, clamped at the ends. */
+export async function stepAcFan(delta: number): Promise<void> {
+  const ac = current.ac;
+  if (!ac || ac.fanModes.length === 0) return;
+  const i = ac.fanModes.indexOf(ac.fanMode ?? "");
+  const base = i === -1 ? 0 : i;
+  const next = clamp(base + delta, 0, ac.fanModes.length - 1);
+  if (next === base) return;
+  await setAcFanMode(ac.fanModes[next]);
 }
 
 // --- Lifecycle --------------------------------------------------------------

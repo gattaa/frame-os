@@ -44,6 +44,7 @@ export const ENTITIES = {
   BATTERY_STATUS: "__mock_battery_status__",
   HOUSE_POWER: "__mock_house_power__",
   CLIMATE_AC: "__mock_climate__",
+  WEATHER: "__mock_weather__",
   /**
    * Single source of truth for day/night — an HA input_boolean driven by the
    * ha/ package (sun elevation + override). The PWA reads this for its theme
@@ -62,6 +63,7 @@ export function getSubscribedEntityIds(): string[] {
     ENTITIES.BATTERY_STATUS,
     ENTITIES.HOUSE_POWER,
     ENTITIES.CLIMATE_AC,
+    ENTITIES.WEATHER,
     ENTITIES.NIGHT_MODE,
   ];
 }
@@ -83,6 +85,7 @@ interface RuntimeHaConfig {
     batteryStatus: string;
     housePower: string;
     climate: string;
+    weather: string;
   };
 }
 
@@ -109,6 +112,7 @@ export async function loadRuntimeConfig(): Promise<void> {
       ENTITIES.BATTERY_STATUS = cfg.entities.batteryStatus || ENTITIES.BATTERY_STATUS;
       ENTITIES.HOUSE_POWER = cfg.entities.housePower || ENTITIES.HOUSE_POWER;
       ENTITIES.CLIMATE_AC = cfg.entities.climate || ENTITIES.CLIMATE_AC;
+      ENTITIES.WEATHER = cfg.entities.weather || ENTITIES.WEATHER;
     }
   } catch (err) {
     console.warn("[config] no runtime-config.json; falling back to mock mode", err);

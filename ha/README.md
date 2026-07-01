@@ -75,7 +75,7 @@ password from `secrets.yaml`). Trade-off: those are stateless HTTP calls — no
 brightness entity, no screensaver state — so you lose the clean automations and
 the PWA's brightness wiring has nothing to read back.
 
-### 3. Confirm the 4 entities the PWA needs
+### 3. Confirm the 5 entities the PWA needs
 Find your real ids (Developer Tools → States) and set them in
 `runtime-config.json`'s `entities` object (not `.env` — see step 1).
 **Please confirm each of these exists on your system:**
@@ -86,6 +86,7 @@ Find your real ids (Developer Tools → States) and set them in
 | `batteryStatus` | charge/discharge state — string state, one of `Charging` / `Discharging` / `Idle` (not numeric) | your battery/inverter integration, e.g. `sensor.solaredge_battery1_status` |
 | `housePower` | instantaneous house power draw, W or kW | energy/grid sensor |
 | `climate` | the AC unit | a `climate.*` entity |
+| `weather` | current condition (`sunny`, `rainy`, ...) | a `weather.*` entity, e.g. `weather.forecast_home` (met.no integration) |
 
 ## Placeholder → where you set it
 

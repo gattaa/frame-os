@@ -5,8 +5,8 @@ Produces, under data/:
   - photos/<id>.jpg   : 6 labeled 1280x800 placeholder photos
   - manifest.json     : a valid manifest pointing at them
   - mock-entities.json : fake Home Assistant values (battery %, battery
-                         charge/discharge status, house power draw, and an
-                         AC climate entity)
+                         charge/discharge status, house power draw, an
+                         AC climate entity, and a weather entity)
 
 These outputs are written exactly the way the real processor writes them, so
 the PWA cannot tell mock data from the real thing.
@@ -113,6 +113,13 @@ def make_placeholder(label: str, caption: str, bg: Tuple[int, int, int]) -> byte
 
 BATTERY_STATUSES = ["Charging", "Discharging", "Idle"]
 
+# A sample of met.no's typical `weather.*` states, so re-running this script
+# cycles through enough variety to eyeball every icon/label mapping.
+WEATHER_STATES = [
+    "sunny", "partlycloudy", "cloudy", "rainy",
+    "snowy", "fog", "lightning", "windy", "clear-night",
+]
+
 
 def mock_entities() -> dict:
     """Shaped to mirror Home Assistant state objects the PWA will read.
@@ -122,6 +129,7 @@ def mock_entities() -> dict:
     you visually check every icon/label variant without live HA.
     """
     status = BATTERY_STATUSES[int(time.time()) % len(BATTERY_STATUSES)]
+    weather_state = WEATHER_STATES[int(time.time()) % len(WEATHER_STATES)]
     # House power should read sensibly alongside the status: drawing from
     # the grid/battery while discharging, near-zero while idle, negative
     # (i.e. exporting/charging from solar) while charging.
@@ -145,6 +153,11 @@ def mock_entities() -> dict:
             "unit_of_measurement": "W",
             "friendly_name": "House Power",
         },
+        "weather": {
+            "entity_id": "weather.forecast_home",
+            "state": weather_state,
+            "friendly_name": "Home",
+        },
         "night_mode": {
             "entity_id": "input_boolean.frame_night_mode",
             "state": "off",  # flip to "on" to preview the dark night theme
@@ -154,7 +167,7 @@ def mock_entities() -> dict:
             "entity_id": "climate.living_room",
             "state": "cool",
             "attributes": {
-                "friendly_name": "Living Room AC",
+                "friendly_name": "Sala AC",
                 "current_temperature": 24.5,
                 "temperature": 22.0,
                 "min_temp": 16,
@@ -163,7 +176,7 @@ def mock_entities() -> dict:
                 "hvac_modes": ["off", "cool", "heat", "fan_only", "dry"],
                 "hvac_action": "cooling",
                 "fan_mode": "auto",
-                "fan_modes": ["auto", "low", "medium", "high"],
+                "fan_modes": ["auto", "low", "medium low", "medium", "medium high", "high"],
             },
         },
     }

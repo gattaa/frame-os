@@ -5,6 +5,7 @@
     "battery": "sensor.home_battery_level",
     "batteryStatus": "sensor.solaredge_battery1_status",
     "housePower": "sensor.house_power",
-    "climate": "climate.living_room"
+    "climate": "climate.living_room",
+    "weather": "weather.forecast_home"
   }
 }
