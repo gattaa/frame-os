@@ -64,6 +64,9 @@ function applyFit(el: HTMLImageElement, entry: ManifestEntry): void {
   const contain = pickFit(entry.w, entry.h) === "contain";
   el.classList.toggle("fit-contain", contain);
   el.classList.toggle("fit-cover", !contain);
+  // Lets styles.css swap the overlay from "light text on photo" to "dark
+  // text/opaque chips on a white bar" — see the has-bars block there.
+  document.documentElement.classList.toggle("has-bars", contain);
 }
 
 async function show(entry: ManifestEntry): Promise<void> {

@@ -13,6 +13,15 @@
  * and is hidden until touched (see overlay.ts). The badge/panel surfaces are
  * the only pieces with their own background, since they need contrast
  * regardless of what photo is behind them.
+ *
+ * White pillarbox/letterbox bars (see .photo.fit-contain) break both of
+ * those assumptions: white-on-white text is illegible, and a badge's light
+ * photo-tint background disappears into a white bar. photos.ts toggles
+ * `html.has-bars` whenever the current photo is letter/pillarboxed; the
+ * block below swaps the free-floating text to dark ink (no shadow needed on
+ * white) and the badge/panel surfaces from a light photo-tint to an opaque
+ * dark chip — the badge/panel foreground colors stay white, since a dark
+ * chip's contents look the same whether the chip sits on a photo or a bar.
  */
 
 :root {
@@ -31,11 +40,30 @@
   --badge-line-selected: rgba(255, 255, 255, 0.42);
   --flame: #e8a066;
   --ice: #8fc7e8;
+
+  /* Free-floating overlay text (clock/date/weather/ministats + photo
+   * caption/chip) — the pieces with no background surface of their own. */
+  --overlay-fg: #fff;
+  --overlay-fg-dim: rgba(255, 255, 255, 0.85);
+  --overlay-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
 
 :root[data-theme="dark"] {
   --bg: #000000;
   --stale: #f0b323;
+}
+
+/* A white bar is showing behind the overlay (see photos.ts pickFit()). */
+html.has-bars {
+  --overlay-fg: #1b1e27;
+  --overlay-fg-dim: rgba(27, 30, 39, 0.7);
+  --overlay-shadow: none;
+  --badge-bg: rgba(20, 22, 28, 0.78);
+  --badge-bg-selected: rgba(20, 22, 28, 0.9);
+  --badge-line: rgba(255, 255, 255, 0.16);
+  --badge-line-selected: rgba(255, 255, 255, 0.3);
+  --panel-bg: rgba(20, 22, 28, 0.86);
+  --panel-line: rgba(255, 255, 255, 0.14);
 }
 
 * { box-sizing: border-box; }
@@ -102,8 +130,8 @@ html, body {
   flex-direction: column;
   align-items: flex-start;
   max-width: 640px;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+  color: var(--overlay-fg);
+  text-shadow: var(--overlay-shadow);
   z-index: 2;
 }
 #caption {
@@ -119,7 +147,7 @@ html, body {
   margin-top: 4px;
   font-size: 19px;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--overlay-fg-dim);
   white-space: nowrap;
 }
 #sender-chip:empty { display: none; }
@@ -134,8 +162,8 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 10;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+  color: var(--overlay-fg);
+  text-shadow: var(--overlay-shadow);
 }
 .ov-badges {
   opacity: 1;
@@ -195,7 +223,7 @@ html, body {
   gap: 18px;
   font-size: 20px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--overlay-fg-dim);
 }
 .ov-stat {
   display: flex;
