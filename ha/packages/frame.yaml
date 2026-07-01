@@ -207,29 +207,6 @@ automation:
     mode: single
 
 # -----------------------------------------------------------------------------
-# OPTIONAL: "energy today" stub — ADAPT TO YOURS
-# -----------------------------------------------------------------------------
-# The PWA's ENERGY_TODAY tile needs a single "kWh used/generated today" sensor.
-# If you already have one, just point ENERGY_TODAY at it and ignore this.
-# If you only have a cumulative meter, uncomment ONE of these to derive a daily
-# sensor, then set ENERGY_TODAY to sensor.frame_energy_today.
-#
-# Option A — utility_meter from a cumulative kWh sensor (resets daily):
-# utility_meter:
-#   frame_energy_today:
-#     source: sensor.REPLACE_ME_energy_total_kwh   # <- your cumulative kWh sensor
-#     cycle: daily
-#
-# Option B — template sensor (if your integration exposes a daily attribute):
-# template:
-#   - sensor:
-#       - name: Frame Energy Today
-#         unique_id: frame_energy_today
-#         unit_of_measurement: "kWh"
-#         device_class: energy
-#         state: "{{ state_attr('sensor.REPLACE_ME_solar', 'energy_today') | float(0) }}"
-
-# -----------------------------------------------------------------------------
 # OPTIONAL FALLBACK: rest_command straight to Fully Kiosk's REST API.
 # Use this ONLY if you skip the Fully Kiosk integration. Prefer the integration
 # (it gives you the light + switches used above). Put the host/password in

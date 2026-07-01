@@ -3,8 +3,8 @@
   "haToken": "REPLACE_WITH_A_LONG_LIVED_ACCESS_TOKEN",
   "entities": {
     "battery": "sensor.home_battery_level",
-    "power": "sensor.grid_power",
-    "energyToday": "sensor.solar_energy_today",
+    "batteryStatus": "sensor.solaredge_battery1_status",
+    "housePower": "sensor.house_power",
     "climate": "climate.living_room"
   }
 }

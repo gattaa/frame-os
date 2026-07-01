@@ -4,8 +4,9 @@
 Produces, under data/:
   - photos/<id>.jpg   : 6 labeled 1280x800 placeholder photos
   - manifest.json     : a valid manifest pointing at them
-  - mock-entities.json : fake Home Assistant values (battery %, live power,
-                         energy today, and an AC climate entity)
+  - mock-entities.json : fake Home Assistant values (battery %, battery
+                         charge/discharge status, house power draw, and an
+                         AC climate entity)
 
 These outputs are written exactly the way the real processor writes them, so
 the PWA cannot tell mock data from the real thing.
@@ -86,8 +87,21 @@ def make_placeholder(label: str, caption: str, bg: Tuple[int, int, int]) -> byte
     return out.getvalue()
 
 
+BATTERY_STATUSES = ["Charging", "Discharging", "Idle"]
+
+
 def mock_entities() -> dict:
-    """Shaped to mirror Home Assistant state objects the PWA will read."""
+    """Shaped to mirror Home Assistant state objects the PWA will read.
+
+    battery_status cycles through all 3 real-world states (Charging /
+    Discharging / Idle) based on the clock, so re-running this script lets
+    you visually check every icon/label variant without live HA.
+    """
+    status = BATTERY_STATUSES[int(time.time()) % len(BATTERY_STATUSES)]
+    # House power should read sensibly alongside the status: drawing from
+    # the grid/battery while discharging, near-zero while idle, negative
+    # (i.e. exporting/charging from solar) while charging.
+    house_power = {"Charging": -450, "Discharging": 1850, "Idle": 60}[status]
     return {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "battery": {
@@ -96,17 +110,16 @@ def mock_entities() -> dict:
             "unit_of_measurement": "%",
             "friendly_name": "Home Battery",
         },
-        "power": {
-            "entity_id": "sensor.grid_power",
-            "state": -340,  # negative = exporting to grid
-            "unit_of_measurement": "W",
-            "friendly_name": "Live Power",
+        "batteryStatus": {
+            "entity_id": "sensor.solaredge_battery1_status",
+            "state": status,
+            "friendly_name": "Home Battery Status",
         },
-        "energy_today": {
-            "entity_id": "sensor.solar_energy_today",
-            "state": 8.4,
-            "unit_of_measurement": "kWh",
-            "friendly_name": "Energy Today",
+        "housePower": {
+            "entity_id": "sensor.house_power",
+            "state": house_power,
+            "unit_of_measurement": "W",
+            "friendly_name": "House Power",
         },
         "night_mode": {
             "entity_id": "input_boolean.frame_night_mode",

@@ -31,8 +31,12 @@ export interface AcState {
 
 export interface FrameState {
   battery: number | null;
-  power: number | null;
-  energyToday: number | null;
+  /**
+   * Raw HA state string, passed through as-is (not parsed/validated as a
+   * number). Expected values: "Charging" | "Discharging" | "Idle".
+   */
+  batteryStatus: string | null;
+  housePower: number | null;
   ac: AcState | null;
   /** HA day/night source of truth; null when unknown. true = night. */
   nightMode: boolean | null;
@@ -45,8 +49,8 @@ const IDB_KEY = "last-state";
 
 const EMPTY: FrameState = {
   battery: null,
-  power: null,
-  energyToday: null,
+  batteryStatus: null,
+  housePower: null,
   ac: null,
   nightMode: null,
   updatedAt: 0,
@@ -123,13 +127,13 @@ function nightFrom(night: HassLike | undefined): boolean | null {
 /** Build FrameState from a map of entity_id -> hass entity. */
 function fromEntityMap(map: Record<string, HassLike | undefined>): Partial<FrameState> {
   const battery = map[ENTITIES.BATTERY_PCT];
-  const power = map[ENTITIES.POWER_NOW];
-  const energy = map[ENTITIES.ENERGY_TODAY];
+  const batteryStatus = map[ENTITIES.BATTERY_STATUS];
+  const housePower = map[ENTITIES.HOUSE_POWER];
   const ac = map[ENTITIES.CLIMATE_AC];
   return {
     battery: battery ? num(battery.state) : null,
-    power: power ? num(power.state) : null,
-    energyToday: energy ? num(energy.state) : null,
+    batteryStatus: batteryStatus ? String(batteryStatus.state) : null,
+    housePower: housePower ? num(housePower.state) : null,
     ac: acFromEntity(ENTITIES.CLIMATE_AC, ac),
     nightMode: nightFrom(map[ENTITIES.NIGHT_MODE]),
     updatedAt: Date.now(),
@@ -156,8 +160,8 @@ async function hydrateFromCache(): Promise<void> {
 
 interface MockEntities {
   battery?: HassLike;
-  power?: HassLike;
-  energy_today?: HassLike;
+  batteryStatus?: HassLike;
+  housePower?: HassLike;
   ac?: HassLike;
   night_mode?: HassLike;
 }
@@ -169,8 +173,8 @@ async function pollMock(): Promise<void> {
     const j = (await res.json()) as MockEntities;
     const map: Record<string, HassLike | undefined> = {
       [ENTITIES.BATTERY_PCT]: j.battery,
-      [ENTITIES.POWER_NOW]: j.power,
-      [ENTITIES.ENERGY_TODAY]: j.energy_today,
+      [ENTITIES.BATTERY_STATUS]: j.batteryStatus,
+      [ENTITIES.HOUSE_POWER]: j.housePower,
       [ENTITIES.CLIMATE_AC]: j.ac,
       [ENTITIES.NIGHT_MODE]: j.night_mode,
     };

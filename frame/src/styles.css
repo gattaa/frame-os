@@ -206,6 +206,14 @@ html, body {
   color: var(--bar-sub);
   margin-left: 2px;
 }
+.battery-icon {
+  font-size: 15px;
+  margin-left: 4px;
+  color: var(--bar-sub);
+}
+.battery-icon:not(:empty) {
+  color: var(--accent);
+}
 
 .ov-ac {
   gap: 4px;

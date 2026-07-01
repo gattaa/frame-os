@@ -2,7 +2,8 @@
 
 The fullscreen Progressive Web App that runs on the AGFAPHOTO frame via Fully
 Kiosk: a photo **slideshow** with a **control-center overlay** (clock, home
-battery %, live power, energy today, AC controls) sourced from Home Assistant.
+battery % + charge/discharge status, house power draw, AC controls) sourced
+from Home Assistant.
 
 **Role in the architecture contract:** READ-ONLY consumer. It only reads
 `../data/photos/` and `../data/manifest.json`, and Home Assistant for live
@@ -49,7 +50,7 @@ support, so it loads the **nomodule legacy bundle**.
 
 | File | Responsibility |
 |------|----------------|
-| `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `POWER_NOW`, `ENERGY_TODAY`, `CLIMATE_AC`), HA base URL + token, Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths, behaviour tunables. |
+| `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `BATTERY_STATUS`, `HOUSE_POWER`, `CLIMATE_AC`), HA base URL + token (loaded at runtime, see below), Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths, behaviour tunables. |
 | `src/photos.ts` | Reads `manifest.json`, preloads, crossfades every ~12s, `object-fit:cover`, optional Ken Burns (toggle with **k** in dev), ordered by `ts`, with a sender chip + caption. |
 | `src/data.ts` | Subscribes to HA entities via `home-assistant-js-websocket`; mirrors every update to IndexedDB; falls back to last-known on disconnect / offline / mock and flags it **stale**. Never crashes on missing entities. |
 | `src/idb.ts` | Tiny promise-based IndexedDB key/value store (hand-written, no dep). |

@@ -41,8 +41,8 @@ export let USE_MOCK: boolean = bool("VITE_USE_MOCK", DEV);
 
 export const ENTITIES = {
   BATTERY_PCT: "__mock_battery__",
-  POWER_NOW: "__mock_power__",
-  ENERGY_TODAY: "__mock_energy_today__",
+  BATTERY_STATUS: "__mock_battery_status__",
+  HOUSE_POWER: "__mock_house_power__",
   CLIMATE_AC: "__mock_climate__",
   /**
    * Single source of truth for day/night — an HA input_boolean driven by the
@@ -59,8 +59,8 @@ export const ENTITIES = {
 export function getSubscribedEntityIds(): string[] {
   return [
     ENTITIES.BATTERY_PCT,
-    ENTITIES.POWER_NOW,
-    ENTITIES.ENERGY_TODAY,
+    ENTITIES.BATTERY_STATUS,
+    ENTITIES.HOUSE_POWER,
     ENTITIES.CLIMATE_AC,
     ENTITIES.NIGHT_MODE,
   ];
@@ -80,8 +80,8 @@ interface RuntimeHaConfig {
   haToken: string;
   entities: {
     battery: string;
-    power: string;
-    energyToday: string;
+    batteryStatus: string;
+    housePower: string;
     climate: string;
   };
 }
@@ -106,8 +106,8 @@ export async function loadRuntimeConfig(): Promise<void> {
     HA.TOKEN = cfg.haToken || "";
     if (cfg.entities) {
       ENTITIES.BATTERY_PCT = cfg.entities.battery || ENTITIES.BATTERY_PCT;
-      ENTITIES.POWER_NOW = cfg.entities.power || ENTITIES.POWER_NOW;
-      ENTITIES.ENERGY_TODAY = cfg.entities.energyToday || ENTITIES.ENERGY_TODAY;
+      ENTITIES.BATTERY_STATUS = cfg.entities.batteryStatus || ENTITIES.BATTERY_STATUS;
+      ENTITIES.HOUSE_POWER = cfg.entities.housePower || ENTITIES.HOUSE_POWER;
       ENTITIES.CLIMATE_AC = cfg.entities.climate || ENTITIES.CLIMATE_AC;
     }
   } catch (err) {

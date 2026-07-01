@@ -4,9 +4,10 @@ The Home Assistant side of frame-os: the **live data** the overlay reads, plus
 **night mode** and **screen control** for the frame. Assumes a self-hosted HA
 behind nginx.
 
-**Role:** HA is the live-data source the `frame/` PWA reads (battery, power,
-energy, AC) and the target for AC + screen control. It is **not** part of the
-photo ingest/processing path. See [`../CLAUDE.md`](../CLAUDE.md).
+**Role:** HA is the live-data source the `frame/` PWA reads (battery %,
+battery charge/discharge status, house power draw, AC) and the target for AC
++ screen control. It is **not** part of the photo ingest/processing path. See
+[`../CLAUDE.md`](../CLAUDE.md).
 
 Everything here uses **clearly-marked placeholders** (`PLACEHOLDER_*`,
 `REPLACE_ME_*`) for entity ids — replace them with your real ones. Nothing
@@ -29,12 +30,22 @@ invents your sensor ids.
 
 ### 1. Long-lived access token for the PWA
 HA → your **Profile → Security → Long-lived access tokens → Create Token**.
-Copy it once. It does **not** go in Home Assistant — it goes in the **PWA**:
+Copy it once. It does **not** go in Home Assistant, and it does **not** go in
+the `frame/` repo or build either — `dist/` is committed to a public repo, so
+anything baked in at build time is publicly visible. Instead it goes in
+`runtime-config.json`, a file that lives only on the HA box:
 
-- `frame/.env` → `VITE_HA_TOKEN=<token>`
-- `frame/.env` → `VITE_HA_BASE_URL=https://ha.example.com` (your HA URL via nginx)
+```json
+// config/www/frame/runtime-config.json — created directly on the box, never committed
+{
+  "haUrl": "https://ha.example.com",
+  "haToken": "<your long-lived access token>",
+  "entities": { "battery": "...", "batteryStatus": "...", "housePower": "...", "climate": "..." }
+}
+```
 
-(See `frame/src/config.ts` → `HA.TOKEN` / `HA.BASE_URL`.)
+See `frame/runtime-config.example.json` and `frame/README.md` for the full
+shape, and `frame/src/config.ts` → `loadRuntimeConfig()` for how it's read.
 
 ### 2. Fully Kiosk Browser integration (preferred over rest_command)
 HA → **Settings → Devices & Services → Add Integration → "Fully Kiosk
@@ -65,34 +76,30 @@ brightness entity, no screensaver state — so you lose the clean automations an
 the PWA's brightness wiring has nothing to read back.
 
 ### 3. Confirm the 4 entities the PWA needs
-Find your real ids (Developer Tools → States) and set them in `frame/.env` /
-`frame/src/config.ts`. **Please confirm each of these exists on your system:**
+Find your real ids (Developer Tools → States) and set them in
+`runtime-config.json`'s `entities` object (not `.env` — see step 1).
+**Please confirm each of these exists on your system:**
 
-| PWA placeholder (`config.ts` / `.env`) | What it is | Likely source |
+| `runtime-config.json` key | What it is | Likely source |
 |----------------------------------------|-----------|---------------|
-| `BATTERY_PCT` (`VITE_HA_BATTERY_PCT`) | home battery state of charge, % | your battery/inverter integration |
-| `POWER_NOW` (`VITE_HA_POWER_NOW`) | live power draw/flow, W | energy/grid sensor |
-| `ENERGY_TODAY` (`VITE_HA_ENERGY_TODAY`) | energy today, kWh | daily energy sensor — see stub below |
-| `CLIMATE_AC` (`VITE_HA_CLIMATE_AC`) | the AC unit | a `climate.*` entity |
-
-If **energy today** isn't a single sensor, `packages/frame.yaml` has an
-**optional, clearly-marked stub** (a `utility_meter` *or* a `template` sensor)
-that derives `sensor.frame_energy_today` from a cumulative meter. Adapt the
-source id to yours, then point `ENERGY_TODAY` at it.
+| `battery` | home battery state of charge, % | your battery/inverter integration |
+| `batteryStatus` | charge/discharge state — string state, one of `Charging` / `Discharging` / `Idle` (not numeric) | your battery/inverter integration, e.g. `sensor.solaredge_battery1_status` |
+| `housePower` | instantaneous house power draw, W or kW | energy/grid sensor |
+| `climate` | the AC unit | a `climate.*` entity |
 
 ## Placeholder → where you set it
 
 | Placeholder | Lives in | Set it to |
 |-------------|----------|-----------|
-| `BATTERY_PCT` | `frame/.env` `VITE_HA_BATTERY_PCT` | your battery % sensor |
-| `POWER_NOW` | `frame/.env` `VITE_HA_POWER_NOW` | your live power sensor |
-| `ENERGY_TODAY` | `frame/.env` `VITE_HA_ENERGY_TODAY` | your daily energy sensor (or `sensor.frame_energy_today`) |
-| `CLIMATE_AC` | `frame/.env` `VITE_HA_CLIMATE_AC` | your `climate.*` AC entity |
-| night-mode boolean | `frame/src/config.ts` (see follow-up) | `input_boolean.frame_night_mode` |
+| `battery` | `runtime-config.json` → `entities.battery` | your battery % sensor |
+| `batteryStatus` | `runtime-config.json` → `entities.batteryStatus` | your charge/discharge status sensor |
+| `housePower` | `runtime-config.json` → `entities.housePower` | your live house power sensor |
+| `climate` | `runtime-config.json` → `entities.climate` | your `climate.*` AC entity |
+| `haUrl` / `haToken` | `runtime-config.json` | your HA URL (via nginx) / long-lived access token |
+| night-mode boolean | `frame/.env` `VITE_HA_NIGHT_MODE` (not sensitive, stays build-time) | `input_boolean.frame_night_mode` |
 | `FULLY_KIOSK_BASE` | `frame/.env` `VITE_FULLY_KIOSK_BASE` | `http://<tablet-ip>:2323` (only if the PWA calls Fully directly; otherwise HA drives the screen) |
 | `light.PLACEHOLDER_fully_kiosk_screen` | `ha/packages/frame.yaml` | your Fully screen `light.` |
 | `switch.PLACEHOLDER_fully_kiosk_screensaver` | `ha/packages/frame.yaml` | your Fully screensaver `switch.` |
-| `sensor.REPLACE_ME_energy_total_kwh` | `ha/packages/frame.yaml` (energy stub) | your cumulative kWh sensor |
 
 > **Note on `FULLY_KIOSK_BASE`:** with the HA integration driving brightness
 > and screen on/off (the design here), the PWA does **not** need to call Fully
@@ -151,5 +158,5 @@ entities:
 
 ## Status
 
-Implemented: night-mode/override helpers, sun + screen automations, energy
-stub, and fallbacks. Replace the placeholder entity ids with yours.
+Implemented: night-mode/override helpers, sun + screen automations, and
+fallbacks. Replace the placeholder entity ids with yours.

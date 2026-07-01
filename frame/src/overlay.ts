@@ -2,9 +2,10 @@
  * Control-center overlay.
  *
  * A solid semi-opaque bar (blur is progressive enhancement only, see CSS)
- * showing clock + date, battery %, live power, energy today, and AC controls.
- * The bar auto-dims during the slideshow to avoid screen retention and nudges
- * its position slightly over time; any touch wakes it to full opacity.
+ * showing clock + date, battery % (with a charge/discharge indicator), house
+ * power draw, and AC controls. The bar auto-dims during the slideshow to
+ * avoid screen retention and nudges its position slightly over time; any
+ * touch wakes it to full opacity.
  */
 
 import { OVERLAY } from "./config";
@@ -46,13 +47,28 @@ function fmt(n: number | null, digits = 0): string {
   return digits > 0 ? n.toFixed(digits) : String(Math.round(n));
 }
 
+/** Small glyph next to the battery %, showing charge direction at a glance. */
+function batteryIcon(status: string | null): string {
+  if (status === "Charging") return "⚡"; // lightning bolt
+  if (status === "Discharging") return "↓"; // down arrow
+  return ""; // Idle / unknown: no icon
+}
+
+/** "1.4kW" above 1000W, "850W" below — always includes its own unit. */
+function fmtPower(n: number | null): string {
+  if (n === null) return "--";
+  const abs = Math.abs(n);
+  if (abs >= 1000) return `${(n / 1000).toFixed(1)}kW`;
+  return `${Math.round(n)}W`;
+}
+
 function render(s: FrameState): void {
   const battery = el("battery");
-  const power = el("power");
-  const energy = el("energy");
+  const battIcon = el("battery-icon");
+  const housePower = el("house-power");
   if (battery) battery.textContent = fmt(s.battery);
-  if (power) power.textContent = fmt(s.power);
-  if (energy) energy.textContent = fmt(s.energyToday, 1);
+  if (battIcon) battIcon.textContent = batteryIcon(s.batteryStatus);
+  if (housePower) housePower.textContent = fmtPower(s.housePower);
 
   const acCurrent = el("ac-current");
   const acTarget = el("ac-target");
