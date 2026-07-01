@@ -76,5 +76,25 @@ end-to-end against the real Chromium build).
 
 ## Configuration
 
-Copy `.env.example` → `.env` for a real-device build (HA token, entity IDs,
-Fully Kiosk host, data paths). None of it is needed for mock-mode development.
+Copy `.env.example` → `.env` for a real-device build (Fully Kiosk host, data
+paths, night-mode entity ID). None of it is needed for mock-mode development.
+
+### Home Assistant connection (HA_URL, HA_TOKEN, entity IDs)
+
+These 5 values are **not** env vars and are never baked into the build:
+`dist/` is committed to a public repo, so anything build-time-injected there
+(env vars included) would be publicly visible — and the HA token must never
+be.
+
+Instead, `config.ts` fetches `<base>runtime-config.json` once at boot (see
+`loadRuntimeConfig()` in `src/config.ts`) and uses that instead. This file:
+
+- is **created directly on the HA box**, at `config/www/frame/runtime-config.json`
+  (i.e. next to the deployed `dist/`) — **not** in this repo, and never committed.
+- follows the shape in [`runtime-config.example.json`](runtime-config.example.json).
+- if missing (e.g. 404, or you never created it), the app falls back to mock
+  mode automatically rather than attempting a live connection with no
+  credentials.
+
+To go live on a real box: copy `runtime-config.example.json` to
+`config/www/frame/runtime-config.json` on the HA host and fill in real values.

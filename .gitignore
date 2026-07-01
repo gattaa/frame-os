@@ -10,6 +10,14 @@ ha/secrets.yaml
 token.txt
 session.json
 
+# frame/'s HA URL/token/entity IDs — created directly on the HA box, never in
+# the repo. dist/ is committed, so also block it landing there via public/.
+runtime-config.json
+frame/runtime-config.json
+frame/public/runtime-config.json
+frame/dist/runtime-config.json
+!frame/runtime-config.example.json
+
 # ---- Generated runtime data ----
 # The display reads photos/ + manifest.json; these are produced by the
 # processor at runtime and must never be committed. Folder structure is

@@ -12,7 +12,8 @@ import {
   ENTITIES,
   HA,
   PATHS,
-  SUBSCRIBED_ENTITY_IDS,
+  getSubscribedEntityIds,
+  loadRuntimeConfig,
   USE_MOCK,
 } from "./config";
 import { idbGet, idbSet } from "./idb";
@@ -216,7 +217,7 @@ async function connectLive(): Promise<void> {
 
     haws.subscribeEntities(conn, (entities: Record<string, HassLike>) => {
       const map: Record<string, HassLike | undefined> = {};
-      for (const id of SUBSCRIBED_ENTITY_IDS) map[id] = entities[id];
+      for (const id of getSubscribedEntityIds()) map[id] = entities[id];
       emit(fromEntityMap(map));
       void persist();
     });
@@ -291,6 +292,7 @@ function startFreshnessWatch(): void {
 /** Start the data layer: hydrate from cache, then connect live or poll mock. */
 export async function startData(): Promise<void> {
   await hydrateFromCache();
+  await loadRuntimeConfig();
   if (USE_MOCK) {
     await pollMock();
     // Re-poll occasionally so a regenerated mock or restored network recovers.
