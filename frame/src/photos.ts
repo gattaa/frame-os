@@ -23,7 +23,9 @@ interface ManifestEntry {
 let entries: ManifestEntry[] = [];
 let idx = 0;
 let frontIsA = true;
-let timer = 0;
+let showing = false;       // a show() is mid-flight (preload + crossfade)
+let timer = 0;             // advance interval
+let refreshTimer = 0;      // manifest re-poll interval
 let kenBurns = SLIDESHOW.KEN_BURNS;
 
 const imgA = () => document.getElementById("photo-a") as HTMLImageElement;
@@ -57,32 +59,41 @@ function applyKenBurns(el: HTMLImageElement): void {
 }
 
 async function show(entry: ManifestEntry): Promise<void> {
-  const url = photoUrl(entry.file);
-  await preload(url);
+  // Guard against re-entrancy: if a previous show() is still preloading (slow
+  // network on the old WebView), skip rather than interleave two crossfades —
+  // overlapping shows would desync the front/back swap and mismatch captions.
+  if (showing) return;
+  showing = true;
+  try {
+    const url = photoUrl(entry.file);
+    await preload(url);
 
-  const back = frontIsA ? imgB() : imgA();
-  const front = frontIsA ? imgA() : imgB();
-  if (!back || !front) return;
+    const back = frontIsA ? imgB() : imgA();
+    const front = frontIsA ? imgA() : imgB();
+    if (!back || !front) return;
 
-  back.src = url;
-  applyKenBurns(back);
+    back.src = url;
+    applyKenBurns(back);
 
-  // Update caption/chip for the incoming photo.
-  const chip = chipEl();
-  const cap = captionEl();
-  const meta = metaEl();
-  if (chip) chip.textContent = entry.uploader || "";
-  if (cap) cap.textContent = entry.caption || "";
-  if (meta) meta.style.display = entry.uploader || entry.caption ? "flex" : "none";
+    // Update caption/chip for the incoming photo.
+    const chip = chipEl();
+    const cap = captionEl();
+    const meta = metaEl();
+    if (chip) chip.textContent = entry.uploader || "";
+    if (cap) cap.textContent = entry.caption || "";
+    if (meta) meta.style.display = entry.uploader || entry.caption ? "flex" : "none";
 
-  // Crossfade: bring back to front.
-  back.classList.add("is-front");
-  front.classList.remove("is-front");
-  frontIsA = !frontIsA;
+    // Crossfade: bring back to front.
+    back.classList.add("is-front");
+    front.classList.remove("is-front");
+    frontIsA = !frontIsA;
+  } finally {
+    showing = false;
+  }
 }
 
 function advance(): void {
-  if (entries.length === 0) return;
+  if (entries.length === 0 || showing) return;
   idx = (idx + 1) % entries.length;
   void show(entries[idx]);
 }
@@ -97,26 +108,65 @@ export function toggleKenBurns(): boolean {
   return kenBurns;
 }
 
-/** Load (or reload) the manifest and (re)start the slideshow. */
-export async function startSlideshow(): Promise<void> {
+/** Fetch + sort the manifest. Returns null on failure (keep what we have). */
+async function fetchManifest(): Promise<ManifestEntry[] | null> {
   try {
     const res = await fetch(PATHS.MANIFEST, { cache: "no-cache" });
     if (!res.ok) throw new Error(`manifest ${res.status}`);
     const data = (await res.json()) as ManifestEntry[];
-    entries = Array.isArray(data) ? data.slice() : [];
+    const list = Array.isArray(data) ? data.slice() : [];
+    // Order by ts ascending for a stable, chronological slideshow.
+    list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    return list;
   } catch (err) {
     console.warn("[photos] manifest fetch failed; SW cache may serve it", err);
-    // If fetch failed entirely we keep whatever we had; on first load this is [].
+    return null;
   }
+}
 
-  // Order by ts ascending for a stable, chronological slideshow.
-  entries.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
-
+/** Adopt a refreshed manifest, preserving the current photo by id. */
+function applyEntries(list: ManifestEntry[]): void {
+  const wasEmpty = entries.length === 0;
+  const currentId = entries.length > 0 ? entries[idx].id : undefined;
+  entries = list;
   if (entries.length === 0) {
-    console.warn("[photos] no photos in manifest");
+    idx = 0;
     return;
   }
-  idx = 0;
-  await show(entries[idx]);
-  schedule();
+  if (currentId) {
+    const found = entries.findIndex((e) => e.id === currentId);
+    idx = found >= 0 ? found : Math.min(idx, entries.length - 1);
+  } else {
+    idx = 0;
+  }
+  // If we previously had nothing on screen, start the show now.
+  if (wasEmpty) {
+    void show(entries[idx]);
+    schedule();
+  }
+}
+
+/** Load (or reload) the manifest and (re)start the slideshow. */
+export async function startSlideshow(): Promise<void> {
+  const list = await fetchManifest();
+  if (list) entries = list;
+
+  if (entries.length > 0) {
+    idx = 0;
+    await show(entries[idx]);
+    schedule();
+  } else {
+    console.warn("[photos] no photos in manifest yet; will keep polling");
+  }
+
+  // Re-poll so photos added by the processor after boot appear without a
+  // reload (the frame is always-on).
+  if (refreshTimer) window.clearInterval(refreshTimer);
+  refreshTimer = window.setInterval(() => void refreshManifest(), SLIDESHOW.MANIFEST_REFRESH_MS);
+}
+
+/** Periodic manifest re-poll: adopt new/removed photos without a reload. */
+async function refreshManifest(): Promise<void> {
+  const list = await fetchManifest();
+  if (list) applyEntries(list);
 }

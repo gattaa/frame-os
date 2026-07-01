@@ -19,18 +19,18 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import hashlib
 import io
-import json
-import os
 import time
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+# Reuse the processor's id + atomic-write helpers (same pipeline/ folder) so
+# mock output stays byte-for-byte indistinguishable from real processor output.
+from processor import atomic_write_bytes, atomic_write_json, content_id
+
 WIDTH, HEIGHT = 1280, 800
-ID_LEN = 16
 
 # (label, caption, uploader, channel, background RGB)
 MOCKS: List[Tuple[str, str, str, str, Tuple[int, int, int]]] = [
@@ -83,16 +83,6 @@ def make_placeholder(label: str, caption: str, bg: Tuple[int, int, int]) -> byte
     out = io.BytesIO()
     img.save(out, format="JPEG", quality=85, optimize=True)
     return out.getvalue()
-
-
-def atomic_write_bytes(path: Path, data: bytes) -> None:
-    tmp = path.with_name(path.name + f".tmp.{os.getpid()}")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
-
-
-def atomic_write_json(path: Path, obj: Any) -> None:
-    atomic_write_bytes(path, (json.dumps(obj, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
 def mock_entities() -> dict:
@@ -157,7 +147,7 @@ def main(argv: List[str] | None = None) -> int:
     manifest = []
     for i, (label, caption, uploader, channel, bg) in enumerate(MOCKS):
         jpeg = make_placeholder(label, caption, bg)
-        eid = hashlib.sha256(jpeg).hexdigest()[:ID_LEN]
+        eid = content_id(jpeg)
         fname = f"{eid}.jpg"
         atomic_write_bytes(photos / fname, jpeg)
         # Stagger timestamps so the slideshow has a stable order.

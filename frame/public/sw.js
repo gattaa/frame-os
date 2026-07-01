@@ -70,19 +70,31 @@ async function markFromCache(response) {
   });
 }
 
+async function fallback(cache, request, fallbackUrl) {
+  var cached = await cache.match(request);
+  if (cached) return markFromCache(cached);
+  if (fallbackUrl) {
+    var fb = await caches.match(fallbackUrl);
+    if (fb) return markFromCache(fb);
+  }
+  return null;
+}
+
 async function networkFirst(request, cacheName, fallbackUrl) {
   var cache = await caches.open(cacheName);
   try {
     var fresh = await fetch(request);
-    if (fresh && fresh.ok) cache.put(request, fresh.clone());
-    return fresh;
-  } catch (err) {
-    var cached = await cache.match(request);
-    if (cached) return markFromCache(cached);
-    if (fallbackUrl) {
-      var fb = await caches.match(fallbackUrl);
-      if (fb) return markFromCache(fb);
+    if (fresh && fresh.ok) {
+      cache.put(request, fresh.clone());
+      return fresh;
     }
+    // A non-ok response (404/500, e.g. processor mid-rewrite or a server
+    // hiccup) is NOT live data — prefer a good cached copy if we have one.
+    var cachedOnErr = await fallback(cache, request, fallbackUrl);
+    return cachedOnErr || fresh;
+  } catch (err) {
+    var cachedOnFail = await fallback(cache, request, fallbackUrl);
+    if (cachedOnFail) return cachedOnFail;
     throw err;
   }
 }

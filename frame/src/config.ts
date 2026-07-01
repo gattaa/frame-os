@@ -88,6 +88,9 @@ export const PATHS = {
 export const SLIDESHOW = {
   INTERVAL_MS: 12_000,
   CROSSFADE_MS: 1200,
+  /** Re-fetch the manifest this often so photos added after boot appear
+   *  without a reload (the frame is always-on). */
+  MANIFEST_REFRESH_MS: Math.max(1000, Number(str("VITE_MANIFEST_REFRESH_MS", "60000")) || 60_000),
   /** Slow Ken Burns pan/zoom on each photo. */
   KEN_BURNS: bool("VITE_KEN_BURNS", true),
 } as const;

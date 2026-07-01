@@ -78,14 +78,19 @@ def _new_id() -> str:
 
 
 def _sniff_image(data: bytes) -> str:
-    """Validate bytes are a supported image; return the file extension."""
+    """Validate bytes are a supported, fully-decodable image; return the ext.
+
+    We fully decode (load) rather than just verify() the header: a truncated
+    upload can pass verify() but fail full decode, and the processor would then
+    quarantine it AFTER we already returned a success receipt. Decoding here
+    means a bad upload is rejected up front with a 4xx the user can act on.
+    """
     try:
         with Image.open(io.BytesIO(data)) as im:
-            im.verify()  # cheap integrity check (consumes the object)
-        with Image.open(io.BytesIO(data)) as im:
             fmt = im.format or ""
+            im.load()  # force full decode; raises on truncation/corruption
     except (UnidentifiedImageError, OSError, ValueError):
-        raise HTTPException(status_code=400, detail="file is not a valid image")
+        raise HTTPException(status_code=400, detail="file is not a valid or complete image")
     ext = FORMAT_EXT.get(fmt)
     if not ext:
         raise HTTPException(status_code=400, detail=f"unsupported image format: {fmt}")

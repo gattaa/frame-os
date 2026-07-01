@@ -251,11 +251,13 @@ def run_once(cfg: Config) -> int:
     manifest = load_manifest(cfg.manifest)
     index: Dict[str, Dict[str, Any]] = {e["id"]: e for e in manifest if "id" in e}
 
-    # 1. Prune entries whose backing file is gone.
+    # 1. Prune entries whose backing file is gone. Require a non-empty "file":
+    #    a malformed entry without one must NOT match the photos directory
+    #    (cfg.photos / "" resolves to the dir itself, which always exists).
     before = len(index)
     index = {
         eid: e for eid, e in index.items()
-        if (cfg.photos / e.get("file", "")).exists()
+        if e.get("file") and (cfg.photos / e["file"]).exists()
     }
     pruned = before - len(index)
     if pruned:
@@ -282,7 +284,7 @@ def run_once(cfg: Config) -> int:
         eid = content_id(src)
 
         # Idempotent: already published and file present -> drop the source, move on.
-        if eid in index and (cfg.photos / index[eid]["file"]).exists():
+        if eid in index and index[eid].get("file") and (cfg.photos / index[eid]["file"]).exists():
             log.info("duplicate %s -> %s (already published)", image.name, eid)
             remove_source(image)
             continue
@@ -315,11 +317,12 @@ def run_once(cfg: Config) -> int:
         log.info("published %s -> %s (%dx%d, %s)",
                  image.name, out_name, w, h, meta["channel"])
 
-    # 3. Write manifest atomically (sorted oldest-first for a stable slideshow).
-    new_manifest = sorted(index.values(), key=lambda e: (str(e.get("ts", "")), e["id"]))
-    atomic_write_json(cfg.manifest, new_manifest)
-
-    if published or pruned:
+    # 3. Write manifest atomically (sorted oldest-first for a stable slideshow)
+    #    only when something actually changed — avoids needless flash writes and
+    #    an mtime bump every idle cycle (which would defeat conditional-GET).
+    if published or pruned or not cfg.manifest.exists():
+        new_manifest = sorted(index.values(), key=lambda e: (str(e.get("ts", "")), e["id"]))
+        atomic_write_json(cfg.manifest, new_manifest)
         log.info("manifest now has %d entr%s",
                  len(new_manifest), "y" if len(new_manifest) == 1 else "ies")
     return published

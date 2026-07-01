@@ -105,19 +105,32 @@ function acFromEntity(entityId: string, e: HassLike | undefined): AcState | null
   };
 }
 
+/**
+ * Resolve the night-mode boolean. On a transient HA dropout the entity reports
+ * "unavailable"/"unknown" (or vanishes from the payload); treating that as
+ * "day" would flash the frame from dark to light. Instead, keep the last-known
+ * value so the theme only changes on a real on/off.
+ */
+function nightFrom(night: HassLike | undefined): boolean | null {
+  if (!night) return current.nightMode;
+  const s = String(night.state);
+  if (s === "on") return true;
+  if (s === "off") return false;
+  return current.nightMode; // unavailable / unknown -> hold last-known
+}
+
 /** Build FrameState from a map of entity_id -> hass entity. */
 function fromEntityMap(map: Record<string, HassLike | undefined>): Partial<FrameState> {
   const battery = map[ENTITIES.BATTERY_PCT];
   const power = map[ENTITIES.POWER_NOW];
   const energy = map[ENTITIES.ENERGY_TODAY];
   const ac = map[ENTITIES.CLIMATE_AC];
-  const night = map[ENTITIES.NIGHT_MODE];
   return {
     battery: battery ? num(battery.state) : null,
     power: power ? num(power.state) : null,
     energyToday: energy ? num(energy.state) : null,
     ac: acFromEntity(ENTITIES.CLIMATE_AC, ac),
-    nightMode: night ? String(night.state) === "on" : null,
+    nightMode: nightFrom(map[ENTITIES.NIGHT_MODE]),
     updatedAt: Date.now(),
     connected: true,
     stale: false,
@@ -160,10 +173,11 @@ async function pollMock(): Promise<void> {
       [ENTITIES.CLIMATE_AC]: j.ac,
       [ENTITIES.NIGHT_MODE]: j.night_mode,
     };
-    // The SW tags cache-served responses; that (or being offline) means we're
-    // rendering last-known values, not live ones -> show the stale dot.
-    const fromCache = res.headers.get("X-From-Cache") === "1";
-    const stale = fromCache || !navigator.onLine;
+    // The SW tags cache-served responses; that is the precise "showing
+    // last-known, not live" signal. We deliberately do NOT use navigator.onLine
+    // here: on the frame, /data is served from the local host, so onLine can be
+    // false (no internet) while the data is perfectly fresh over the LAN.
+    const stale = res.headers.get("X-From-Cache") === "1";
     emit({ ...fromEntityMap(map), connected: !stale, stale });
     await persist();
   } catch (err) {
@@ -178,6 +192,14 @@ async function pollMock(): Promise<void> {
 // Loosely typed to avoid leaking the lib's types across the module boundary.
 let conn: any = null;
 
+// Cache the lazily-imported lib so AC actions don't re-resolve it each press.
+type Haws = typeof import("home-assistant-js-websocket");
+let hawsMod: Haws | null = null;
+async function getHaws(): Promise<Haws> {
+  if (!hawsMod) hawsMod = await import("home-assistant-js-websocket");
+  return hawsMod;
+}
+
 async function connectLive(): Promise<void> {
   if (!HA.TOKEN) {
     console.warn("[data] no HA token configured; staying on last-known");
@@ -185,7 +207,7 @@ async function connectLive(): Promise<void> {
     return;
   }
   try {
-    const haws = await import("home-assistant-js-websocket");
+    const haws = await getHaws();
     const auth = haws.createLongLivedTokenAuth(HA.BASE_URL, HA.TOKEN);
     conn = await haws.createConnection({ auth });
 
@@ -220,7 +242,7 @@ export async function nudgeAcTarget(delta: number): Promise<void> {
 
   if (USE_MOCK || !conn) return; // dev/offline: optimistic only
   try {
-    const haws = await import("home-assistant-js-websocket");
+    const haws = await getHaws();
     await haws.callService(conn, "climate", "set_temperature",
       { temperature: next }, { entity_id: ac.entityId });
   } catch (err) {
@@ -239,7 +261,7 @@ export async function cycleAcMode(): Promise<void> {
 
   if (USE_MOCK || !conn) return;
   try {
-    const haws = await import("home-assistant-js-websocket");
+    const haws = await getHaws();
     await haws.callService(conn, "climate", "set_hvac_mode",
       { hvac_mode: next }, { entity_id: ac.entityId });
   } catch (err) {
@@ -248,6 +270,23 @@ export async function cycleAcMode(): Promise<void> {
 }
 
 // --- Lifecycle --------------------------------------------------------------
+
+// If nothing has updated for this long, treat the data as stale even if the
+// link still looks "connected". Catches a silent stall (HA reachable but an
+// integration hung and the entity stopped publishing) that emits no
+// disconnect event. Generous so a genuinely quiet but healthy feed (HA only
+// pushes on change) doesn't false-trip.
+const STALE_AFTER_MS = 15 * 60 * 1000;
+
+function startFreshnessWatch(): void {
+  window.setInterval(() => {
+    if (current.updatedAt > 0 && !current.stale &&
+        Date.now() - current.updatedAt > STALE_AFTER_MS) {
+      console.warn("[data] no update in >%d min; marking stale", STALE_AFTER_MS / 60000);
+      emit({ stale: true });
+    }
+  }, 60_000);
+}
 
 /** Start the data layer: hydrate from cache, then connect live or poll mock. */
 export async function startData(): Promise<void> {
@@ -259,4 +298,5 @@ export async function startData(): Promise<void> {
   } else {
     await connectLive();
   }
+  startFreshnessWatch();
 }
