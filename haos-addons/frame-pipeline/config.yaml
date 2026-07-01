@@ -6,7 +6,7 @@ description: >-
   or any other channel), normalizes them (EXIF rotation, downscale, re-encode,
   strip EXIF), and publishes photos/ + manifest.json under config/www/frame
   so the frame-os display PWA can read them at /local/frame/.
-version: "1.0.0"
+version: "1.0.1"
 arch:
   - amd64
   - aarch64

@@ -17,7 +17,7 @@ startup: services
 # Ingress: no `ports:` key here at all, so nothing is published to the host.
 # The container is only reachable through the Supervisor's ingress proxy
 # (172.30.32.2), which is also enforced at the application layer — see
-# RESTRICT_TO_SUPERVISOR in run.sh / ../../uploader/app.py. panel_icon +
+# RESTRICT_TO_SUPERVISOR in run.sh / src/app.py. panel_icon +
 # panel_title make it eligible for the HA sidebar (still requires the user to
 # flip "Show in sidebar" on the add-on's Info page — see DOCS.md).
 ingress: true

@@ -103,7 +103,8 @@ class Config:
         (``OUTPUT_DIR`` is the parent of ``photos/`` and ``manifest.json``,
         mirroring this repo's ``data/`` layout) — see ../haos-addons/README.md.
         """
-        root = Path(__file__).resolve().parent.parent  # repo root (parent of pipeline/)
+        # repo root: this file lives at haos-addons/frame-pipeline/src/processor.py
+        root = Path(__file__).resolve().parent.parent.parent.parent
         data_default = root / "data"
         incoming_env = os.getenv("INCOMING_DIR")
         output_env = os.getenv("OUTPUT_DIR")

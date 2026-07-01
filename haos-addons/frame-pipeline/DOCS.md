@@ -1,9 +1,104 @@
 # frame-os Pipeline Processor
 
-Wraps `pipeline/processor.py` (see [`../../pipeline/README.md`](../../pipeline/README.md)
-for the full contract) as a Home Assistant OS add-on. It's the **only writer**
-of `photos/` + `manifest.json` — see [`../../CLAUDE.md`](../../CLAUDE.md) for
-why that boundary matters.
+A Home Assistant OS add-on wrapping `src/processor.py` — the **only writer**
+of `photos/` + `manifest.json`. See [`../../CLAUDE.md`](../../CLAUDE.md) for
+why that boundary matters. HAOS is the only place this project runs, so
+`src/processor.py` is the **single source of truth** for the processor — it
+isn't synced in from anywhere else.
+
+For the mock-data generator used to develop the `frame/` PWA without any real
+ingest, see [`../../pipeline/README.md`](../../pipeline/README.md) — that's
+the one thing that still lives outside `haos-addons/`, since it's a local dev
+tool with nothing to do with the HAOS runtime.
+
+## The photo/manifest contract
+
+Any ingest channel (today, just the `frame-uploader` add-on) drops **two
+files** into `/share/frame/incoming` per photo:
+
+1. an image — `sunset.jpg`
+2. a sidecar — **`<image>.meta.json`** — `sunset.jpg.meta.json`
+
+The processor turns settled pairs into normalized photos + manifest entries.
+Channels know nothing about processing or the manifest; the processor knows
+nothing about which channel produced a file. That's what makes channels
+swappable.
+
+```
+incoming/                         processor                photos/ + manifest.json
+  sunset.jpg            ─┐      honor EXIF rotation        photos/<id>.jpg
+  sunset.jpg.meta.json  ─┴──▶   downscale <=1280 long ──▶  manifest.json entry
+                                 re-encode JPEG q85         (display reads these)
+                                 strip EXIF
+```
+
+### meta.json schema
+
+`<image>.meta.json` is a JSON object:
+
+| field      | type   | meaning                                            |
+|------------|--------|----------------------------------------------------|
+| `uploader` | string | who added the photo (display name / handle)        |
+| `caption`  | string | caption to show with the photo (may be empty)      |
+| `channel`  | string | which ingest channel produced it (currently just `"ha"`; the field stays channel-agnostic so more can be added later) |
+| `ts`       | string | ISO-8601 UTC timestamp the photo was added         |
+
+Example:
+
+```json
+{
+  "uploader": "alice",
+  "caption": "Sunrise over the hills",
+  "channel": "ha",
+  "ts": "2026-06-01T09:00:00Z"
+}
+```
+
+All fields are tolerated-missing: an absent or empty value falls back to a
+default (`uploader`/`channel` → `"unknown"`, `caption` → `""`, `ts` → the
+image's mtime). A sidecar that is missing entirely is **waited on** for up to
+`NO_META_GRACE` seconds (default 120) in case the channel is still writing it,
+then the image is processed with defaults.
+
+### manifest.json schema
+
+`manifest.json` is a JSON array, sorted oldest-first by `ts`:
+
+| field      | type   | meaning                                              |
+|------------|--------|------------------------------------------------------|
+| `id`       | string | content hash of the **source** image (stable id)     |
+| `file`     | string | output filename in `photos/` (always `<id>.jpg`)     |
+| `uploader` | string | from the sidecar                                     |
+| `caption`  | string | from the sidecar                                     |
+| `channel`  | string | from the sidecar                                     |
+| `ts`       | string | from the sidecar                                     |
+| `w`        | int    | processed width in px                                |
+| `h`        | int    | processed height in px                               |
+
+## Guarantees
+
+- **Idempotent.** Re-running never duplicates: the `id` is a content hash, so a
+  photo already published (output file present) is skipped. Dropping the same
+  image twice (even under a different name) collapses to **one** entry.
+- **Self-healing manifest.** Entries whose backing file no longer exists in
+  `photos/` are pruned on the next run.
+- **Robust to partial / concurrent writers.** Only files untouched for
+  `SETTLE_SECONDS` (default 2s) are considered, so half-written uploads are left
+  alone. The manifest and every output image are written via **temp-file +
+  atomic rename**.
+- **Robust to corrupt input.** Undecodable images are moved to
+  `incoming/_rejected/` (with their sidecar) instead of crashing or being
+  retried forever.
+- **Normalization:** EXIF orientation is baked in, the long edge is capped at
+  **1280px** (never upscaled), output is JPEG **quality 85** with **EXIF
+  stripped**. Transparency is flattened onto white.
+
+### Tunables
+
+Constants at the top of `src/processor.py`: `MAX_LONG_EDGE` (1280,
+env-overridable via `max_long_edge`), `JPEG_QUALITY` (85, env-overridable via
+`jpeg_quality`), `SETTLE_SECONDS` (2), `NO_META_GRACE` (120), `POLL_INTERVAL`
+(30, env-overridable via `poll_interval`), `ID_LEN` (16).
 
 ## What it does
 
@@ -59,18 +154,12 @@ Both directories are created automatically on startup if missing.
 
 ## Iterating on the code
 
-This add-on's `src/processor.py` is a **synced copy** of the canonical
-`pipeline/processor.py` (see [`../sync.sh`](../sync.sh)). To pick up an edit:
-
-```bash
-./haos-addons/sync.sh              # re-copies pipeline/processor.py in
-```
-
-Then **bump `version` in `config.yaml`** (e.g. `1.0.0` → `1.0.1`) — the
-Supervisor only rebuilds an add-on's image when its version changes. Re-copy
-the folder to your HAOS add-ons location (or `git pull` there if you deploy
-via a git-backed local checkout), then **Check for updates** → **Update** in
-the Add-on Store.
+`src/processor.py` is edited directly here — there's no separate canonical
+copy to sync in from anywhere else. After an edit, **bump `version` in
+`config.yaml`** (e.g. `1.0.0` → `1.0.1`) — the Supervisor only rebuilds an
+add-on's image when its version changes. Re-copy the folder to your HAOS
+add-ons location (or `git pull` there if you deploy via a git-backed local
+checkout), then **Check for updates** → **Update** in the Add-on Store.
 
 ## Multi-arch build note
 

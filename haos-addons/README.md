@@ -1,22 +1,25 @@
-# haos-addons/ — Home Assistant OS add-on wrappers
+# haos-addons/ — Home Assistant OS add-ons
 
-Wraps `pipeline/` and `uploader/` as **Home Assistant OS local add-ons**, so
-the Supervisor manages them: they survive reboots, restart on failure, and
-(for `frame-uploader`) need no extra port opened on the host.
+HAOS is the only place this project actually runs — there's no separate
+docker-compose/bare-process deployment to keep in sync, so each add-on's
+`src/` **is** the canonical source for that service, edited directly here.
 
-**Nothing about the file/manifest contract changes.** These are wrappers, not
-a rewrite — see [`../CLAUDE.md`](../CLAUDE.md) for the contract itself
-(channels write `incoming/`; the processor is the sole writer of `photos/` +
+**Nothing about the file/manifest contract changes.** See
+[`../CLAUDE.md`](../CLAUDE.md) for the contract itself (channels write
+`incoming/`; the processor is the sole writer of `photos/` +
 `manifest.json`; the display only reads them). Each add-on folder is a
 **self-contained Docker build context** with its own `config.yaml`,
-`Dockerfile`, `run.sh`, and a synced copy of the relevant service's source.
+`Dockerfile`, `run.sh`, and `src/`.
 
 ```
 haos-addons/
-├── sync.sh                # re-copies canonical source into each add-on's src/
 ├── frame-pipeline/         # processor, loop mode, no ports
 └── frame-uploader/         # FastAPI sidecar + self-served upload page, ingress (no port)
 ```
+
+The only thing outside `haos-addons/` is [`../pipeline/gen_mock.py`](../pipeline/README.md),
+a local dev tool for developing the `frame/` PWA without any real ingest —
+it has nothing to do with the HAOS runtime.
 
 ## The shared path contract
 
@@ -38,12 +41,7 @@ structured so another one could be added later without touching
 
 ## Deploy
 
-1. **Build each add-on's `src/`** (already done once; re-run after editing
-   canonical source):
-   ```bash
-   ./haos-addons/sync.sh
-   ```
-2. **Copy into your HAOS local add-ons location.** Home Assistant OS watches a
+1. **Copy into your HAOS local add-ons location.** Home Assistant OS watches a
    folder for local add-ons, one subfolder per add-on:
    ```bash
    cp -r haos-addons/frame-pipeline haos-addons/frame-uploader /addons/
@@ -60,10 +58,10 @@ structured so another one could be added later without touching
    confirm on your own system: SSH in and run `ls /addons` (or `ls
    /addons/local` if the former doesn't exist) — whichever one already
    contains folders/is writable is the one Supervisor is watching.
-3. **Reload the Add-on Store**: Settings → Add-ons → Add-on Store → ⋮
+2. **Reload the Add-on Store**: Settings → Add-ons → Add-on Store → ⋮
    (top-right) → **Check for updates**. Both should appear under
    **Local add-ons**.
-4. Install and configure each one — see its own `DOCS.md`
+3. Install and configure each one — see its own `DOCS.md`
    ([`frame-pipeline/DOCS.md`](./frame-pipeline/DOCS.md),
    [`frame-uploader/DOCS.md`](./frame-uploader/DOCS.md)) for options, install
    steps, and — for the uploader — the ingress-vs-mapped-port security
@@ -71,21 +69,16 @@ structured so another one could be added later without touching
 
 ## Iterating
 
-Each add-on's `src/` is a **synced copy** of the canonical service (`pipeline/`,
-`uploader/` — the single source of truth). After editing canonical source:
+Edit `src/processor.py` / `src/app.py` directly in each add-on's own folder —
+they're the only copy. After an edit, **bump `version`** in the affected
+add-on's `config.yaml` — Supervisor only rebuilds an add-on's image when its
+version string changes. Re-copy (or `git pull`, if you deploy via a git
+checkout at the add-ons location) and **Check for updates** → **Update** in
+the Store.
 
-```bash
-./haos-addons/sync.sh
-```
-
-Then **bump `version`** in the affected add-on's `config.yaml` — Supervisor
-only rebuilds an add-on's image when its version string changes. Re-copy (or
-`git pull`, if you deploy via a git checkout at the add-ons location) and
-**Check for updates** → **Update** in the Store.
-
-Each add-on's own `requirements.txt` is maintained by hand in that add-on's
-folder (Alpine/musl-appropriate pins) and is **not** touched by `sync.sh` —
-only the `.py`/`.js` source files are synced.
+Each add-on's own `requirements.txt` is maintained by hand (Alpine/musl-
+appropriate pins, which can differ from a generic `pip install` — e.g. the
+uploader drops uvicorn's `[standard]` extra; see its own comment for why).
 
 ## Multi-arch builds: `build.yaml` and a deprecation note
 

@@ -20,16 +20,40 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
+import json
+import os
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-# Reuse the processor's id + atomic-write helpers (same pipeline/ folder) so
-# mock output stays byte-for-byte indistinguishable from real processor output.
-from processor import atomic_write_bytes, atomic_write_json, content_id
+ID_LEN = 16
+
+
+def content_id(data: bytes) -> str:
+    """Stable id = first ID_LEN hex chars of the sha256 of the source bytes.
+
+    Duplicated from the real processor (haos-addons/frame-pipeline/src/
+    processor.py) rather than imported, so this dev-only mock generator has
+    no dependency on it — mock output still needs to be byte-for-byte
+    indistinguishable from real processor output, hence the same algorithm.
+    """
+    return hashlib.sha256(data).hexdigest()[:ID_LEN]
+
+
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    tmp = path.with_name(path.name + f".tmp.{os.getpid()}")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+
+
+def atomic_write_json(path: Path, obj: Any) -> None:
+    text = json.dumps(obj, indent=2, ensure_ascii=False) + "\n"
+    atomic_write_bytes(path, text.encode("utf-8"))
+
 
 WIDTH, HEIGHT = 1280, 800
 

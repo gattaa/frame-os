@@ -1,9 +1,32 @@
 # frame-os Uploader
 
-Wraps `uploader/app.py` (see [`../../uploader/README.md`](../../uploader/README.md))
-as a Home Assistant OS add-on. This is an **ingest channel**: it only ever
-writes into `/share/frame/incoming` — never `photos/` or `manifest.json`. See
-[`../../CLAUDE.md`](../../CLAUDE.md) for the full architecture contract.
+A Home Assistant OS add-on wrapping `src/app.py`. This is an **ingest
+channel**: it only ever writes into `/share/frame/incoming` — never
+`photos/` or `manifest.json`. See [`../../CLAUDE.md`](../../CLAUDE.md) for
+the full architecture contract. HAOS is the only place this project runs, so
+`src/app.py` is the **single source of truth** for the sidecar — it isn't
+synced in from anywhere else.
+
+## API
+
+- `GET /` — the upload page (self-contained HTML/CSS/JS, no external assets).
+  Its JS posts to `POST /upload` on a *relative* path so it keeps working
+  under HA Ingress's per-add-on path prefix.
+- `POST /upload` — multipart form: `file` (the image), `uploader` (free-text
+  name, typed into the page's "Your name" field and remembered in the
+  browser's `localStorage`), `caption` (optional). Validates the bytes really
+  are a decodable image, enforces `max_upload_mb`, rate-limits to
+  `rate_limit_per_min` per client. Writes `incoming/<id>.<ext>` +
+  `incoming/<id>.<ext>.meta.json` (`{uploader, caption, channel: "ha", ts}`) —
+  the sidecar is written **before** the image is revealed, so the processor
+  never sees an image without its meta. Returns
+  `200 {"id": "...", "channel": "ha", "status": "queued"}`.
+  See "Security model" below for when `X-Upload-Token` is required.
+- `GET /health` — liveness probe.
+
+No HA auth/user API is involved in attribution — the name typed into the page
+rides along the `page → sidecar → incoming/ → processor → manifest.json`
+path as an ordinary form field, and the frame shows it as the sender chip.
 
 The add-on serves its own upload UI at `GET /` — no Lovelace card or dashboard
 config needed. Reached via HA Ingress, it can live as a **sidebar panel**
@@ -19,7 +42,7 @@ frame-os Uploader → **Open Web UI**.
    ingress requirements, the add-on **must** deny anything not from the
    Supervisor's fixed internal address `172.30.32.2` — `run.sh` sets
    `RESTRICT_TO_SUPERVISOR=true`, which `app.py`'s middleware enforces (see
-   `../../uploader/app.py`, function `_restrict_to_supervisor`).
+   `src/app.py`, function `_restrict_to_supervisor`).
 2. **`upload_token` is enforced only for non-ingress traffic.** Once the
    middleware above has verified a request came from the Supervisor's ingress
    proxy, it's already known to be authenticated (by the HA session) and
@@ -101,10 +124,19 @@ your own reverse proxy:
      8099/tcp: "frame-os uploader HTTP API"
    ```
 2. Bump `version` and reinstall (see "Iterating" below).
-3. Proxy `https://ha.example.com/frame-upload/` → the add-on's host:8099 in
-   your nginx config (see the canonical `../../uploader/README.md` for a ready
-   nginx `location` block), then open `https://ha.example.com/frame-upload/`
-   to get the same upload page.
+3. Proxy `https://ha.example.com/frame-upload/` → the add-on's host:8099, e.g.:
+   ```nginx
+   # within your existing HTTPS server { } for ha.example.com
+   location /frame-upload/ {
+       proxy_pass http://127.0.0.1:8099/;
+       proxy_set_header Host $host;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+       client_max_body_size 30m;            # >= max_upload_mb
+   }
+   ```
+   then open `https://ha.example.com/frame-upload/` to get the same upload
+   page.
    `RESTRICT_TO_SUPERVISOR` no longer applies in this mode (only ingress
    traffic originates from `172.30.32.2`); the shared-secret `upload_token` is
    now the only thing protecting the endpoint, so make sure your reverse
@@ -115,14 +147,10 @@ your own reverse proxy:
 
 ## Iterating on the code
 
-`src/app.py` is a **synced copy** of the canonical `uploader/app.py` (see
-[`../sync.sh`](../sync.sh)). `requirements.txt` in this folder is maintained
-separately (Alpine-appropriate; notably plain `uvicorn`, not the `[standard]`
+`src/app.py` is edited directly here — there's no separate canonical copy to
+sync in from anywhere else. `requirements.txt` in this folder is maintained
+by hand (Alpine-appropriate; notably plain `uvicorn`, not the `[standard]`
 extra — see the comment at the top of that file for why).
 
-```bash
-./haos-addons/sync.sh   # re-copies uploader/app.py in
-```
-
-Then bump `version` in `config.yaml` and **Check for updates** → **Update** in
-the Add-on Store (Supervisor only rebuilds on a version bump).
+After an edit, bump `version` in `config.yaml` and **Check for updates** →
+**Update** in the Add-on Store (Supervisor only rebuilds on a version bump).
