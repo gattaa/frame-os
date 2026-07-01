@@ -19,12 +19,12 @@ Produces under `../data/`:
 
 All of `data/`'s contents are gitignored; regenerate any time.
 
-The real processor is **not** in this folder — it only runs as the
-`frame-pipeline` Home Assistant OS add-on (HAOS is the only place this
-project actually runs; there's no standalone/docker-compose deployment to
-keep in sync). Its source and the full photo/manifest contract are
-documented in
-[`../haos-addons/frame-pipeline/DOCS.md`](../haos-addons/frame-pipeline/DOCS.md).
+The real processor is **not** in this folder — it runs inline inside the
+`frame-uploader` Home Assistant OS add-on, as part of handling each upload
+(HAOS is the only place this project actually runs; there's no
+standalone/docker-compose deployment to keep in sync). Its source and the
+full photo/manifest contract are documented in
+[`../haos-addons/frame-uploader/DOCS.md`](../haos-addons/frame-uploader/DOCS.md).
 `gen_mock.py` duplicates the couple of small id/atomic-write helpers it needs
 from that processor (see the comment at the top of `content_id()`) rather
 than importing across folders, so this dev tool has no dependency on the

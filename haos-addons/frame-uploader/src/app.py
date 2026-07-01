@@ -1,13 +1,13 @@
-"""frame-os uploader sidecar.
+"""frame-os uploader + processor sidecar.
 
-An ingest channel: it serves its own small upload page (GET /) and accepts
-image uploads (POST /upload) — typically opened as a Home Assistant Ingress
-sidebar panel — and drops them, plus a matching `<image>.meta.json` sidecar,
-into the shared `incoming/` directory the pipeline processor watches.
-
-It knows NOTHING about photo processing or the manifest. Per the architecture
-contract (see ../CLAUDE.md) it only ever writes into `incoming/`. The processor
-is the sole writer of `photos/` + `manifest.json`.
+The single HAOS add-on for ingest: it serves its own small upload page
+(GET /) and accepts image uploads (POST /upload) — typically opened as a Home
+Assistant Ingress sidebar panel. On each upload it saves the raw file plus a
+matching `<image>.meta.json` sidecar into `incoming/`, then immediately
+processes that one file inline (resize/EXIF/manifest — see `processor.py`)
+before responding. It is the only writer of both `incoming/` and
+`photos/`/`manifest.json`. See ../CLAUDE.md for the architecture contract and
+DOCS.md for why processing is inline rather than a separate polling service.
 
 Contract for the drop:
     incoming/<id>.<ext>             the raw image (validated, original bytes)
@@ -31,9 +31,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 
+import processor as proc
+
 # --- Config (env-driven) ----------------------------------------------------
 
 INCOMING_DIR = Path(os.getenv("INCOMING_DIR", "/data/incoming"))
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/data"))
+PROC_CFG = proc.Config(
+    incoming=INCOMING_DIR,
+    photos=OUTPUT_DIR / "photos",
+    manifest=OUTPUT_DIR / "manifest.json",
+)
 MAX_UPLOAD_MB = float(os.getenv("MAX_UPLOAD_MB", "25"))
 MAX_UPLOAD_BYTES = int(MAX_UPLOAD_MB * 1024 * 1024)
 # Comma-separated list of allowed origins for CORS, e.g. "https://ha.example.com".
@@ -121,8 +129,10 @@ def _rate_limited(key: str) -> bool:
 
 
 @app.on_event("startup")
-def _ensure_incoming() -> None:
+def _ensure_dirs() -> None:
     INCOMING_DIR.mkdir(parents=True, exist_ok=True)
+    PROC_CFG.photos.mkdir(parents=True, exist_ok=True)
+    PROC_CFG.manifest.parent.mkdir(parents=True, exist_ok=True)
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -159,10 +169,10 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
     os.replace(tmp, path)
 
 
-def _drop_into_incoming(data: bytes, ext: str, uploader: str, caption: str) -> str:
-    """Write the image + its sidecar so the processor never sees one without
-    the other: the sidecar is written first, then the image is revealed via an
-    atomic rename from a non-scanned `.part` name."""
+def _drop_into_incoming(data: bytes, ext: str, uploader: str, caption: str) -> Path:
+    """Write the image + its sidecar so processing never sees one without the
+    other: the sidecar is written first, then the image is revealed via an
+    atomic rename from a non-scanned `.part` name. Returns the image path."""
     upload_id = _new_id()
     img_name = f"{upload_id}.{ext}"
     img_path = INCOMING_DIR / img_name
@@ -182,7 +192,7 @@ def _drop_into_incoming(data: bytes, ext: str, uploader: str, caption: str) -> s
     _atomic_write_bytes(meta_path, (json.dumps(meta, ensure_ascii=False) + "\n").encode("utf-8"))
     # 3. Reveal the image (now its sidecar already exists).
     os.replace(staged, img_path)
-    return upload_id
+    return img_path
 
 
 # --- Upload page (served at GET /, e.g. as an HA Ingress sidebar panel) -----
@@ -424,10 +434,25 @@ async def upload(
     uploader = (uploader or "family").strip()[:80] or "family"
     caption = (caption or "").strip()[:MAX_CAPTION_LEN]
 
-    upload_id = _drop_into_incoming(data, ext, uploader, caption)
+    img_path = _drop_into_incoming(data, ext, uploader, caption)
+
+    # Process inline (resize/EXIF/manifest — see processor.py) so the response
+    # only comes back once the photo is actually live. See DOCS.md "Inline
+    # processing" for why this add-on doesn't return early with a separate
+    # poll endpoint: a single small image processes in well under a second.
+    entry = proc.process_one(PROC_CFG, img_path)
+    if entry is None:
+        raise HTTPException(status_code=500, detail="upload saved but processing failed")
+
     return JSONResponse(
         status_code=200,
-        content={"id": upload_id, "channel": CHANNEL, "status": "queued"},
+        content={
+            "id": entry["id"],
+            "channel": entry["channel"],
+            "status": "ok",
+            "w": entry["w"],
+            "h": entry["h"],
+        },
     )
 
 

@@ -1,9 +1,10 @@
 #!/usr/bin/with-contenv bashio
-# frame-os uploader sidecar — HAOS add-on entrypoint.
+# frame-os uploader + processor sidecar — HAOS add-on entrypoint.
 set -e
 
 INCOMING_DIR="/share/frame/incoming"
-mkdir -p "${INCOMING_DIR}"
+OUTPUT_DIR="/config/www/frame"
+mkdir -p "${INCOMING_DIR}" "${OUTPUT_DIR}/photos"
 
 UPLOAD_TOKEN="$(bashio::config 'upload_token')"
 if [ -z "${UPLOAD_TOKEN}" ] || [ "${#UPLOAD_TOKEN}" -lt 16 ]; then
@@ -11,10 +12,13 @@ if [ -z "${UPLOAD_TOKEN}" ] || [ "${#UPLOAD_TOKEN}" -lt 16 ]; then
 fi
 
 export INCOMING_DIR
+export OUTPUT_DIR
 export UPLOAD_TOKEN
 export MAX_UPLOAD_MB="$(bashio::config 'max_upload_mb')"
 export RATE_LIMIT_PER_MIN="$(bashio::config 'rate_limit_per_min')"
 export ALLOWED_ORIGINS="$(bashio::config 'allowed_origins')"
+export MAX_LONG_EDGE="$(bashio::config 'max_long_edge')"
+export JPEG_QUALITY="$(bashio::config 'jpeg_quality')"
 export UPLOADER_HOST="0.0.0.0"
 export UPLOADER_PORT="8099"
 # This add-on ships with ingress: true and no `ports:` mapping (see
@@ -24,6 +28,9 @@ export UPLOADER_PORT="8099"
 # https://developers.home-assistant.io/docs/apps/presentation#ingress
 export RESTRICT_TO_SUPERVISOR="true"
 
-bashio::log.info "frame-uploader starting on :${UPLOADER_PORT} (ingress only) — incoming=${INCOMING_DIR}"
+bashio::log.info "frame-uploader starting on :${UPLOADER_PORT} (ingress only)"
+bashio::log.info "  incoming = ${INCOMING_DIR}  (share, rw)"
+bashio::log.info "  output   = ${OUTPUT_DIR}  (config, rw; served at /local/frame/)"
+bashio::log.info "  max_long_edge=${MAX_LONG_EDGE}px jpeg_quality=${JPEG_QUALITY}"
 
 exec python3 -m uvicorn app:app --host "${UPLOADER_HOST}" --port "${UPLOADER_PORT}"

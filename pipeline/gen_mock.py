@@ -36,7 +36,7 @@ ID_LEN = 16
 def content_id(data: bytes) -> str:
     """Stable id = first ID_LEN hex chars of the sha256 of the source bytes.
 
-    Duplicated from the real processor (haos-addons/frame-pipeline/src/
+    Duplicated from the real processor (haos-addons/frame-uploader/src/
     processor.py) rather than imported, so this dev-only mock generator has
     no dependency on it — mock output still needs to be byte-for-byte
     indistinguishable from real processor output, hence the same algorithm.

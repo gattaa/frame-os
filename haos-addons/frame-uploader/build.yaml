@@ -1,4 +1,4 @@
-# See ../frame-pipeline/build.yaml for the deprecation note on build.yaml.
+# See ../README.md ("Multi-arch builds") for the deprecation note on build.yaml.
 # Tags verified to exist for BOTH archs at the time this was written:
 #   ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.24
 #   ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.24

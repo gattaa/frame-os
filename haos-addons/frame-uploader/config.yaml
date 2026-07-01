@@ -1,12 +1,14 @@
 name: "frame-os Uploader"
 slug: "frame_uploader"
 description: >-
-  FastAPI ingest sidecar for frame-os. Serves its own upload page (opened as
-  an HA Ingress sidebar panel) and drops uploads (with the shared {uploader,
-  caption, channel:"ha", ts} sidecar) into share/frame/incoming for the
-  frame-pipeline add-on to pick up. Reachable via Home Assistant Ingress by
-  default — no port is opened on the host.
-version: "1.1.0"
+  FastAPI ingest + processing sidecar for frame-os. Serves its own upload page
+  (opened as an HA Ingress sidebar panel), saves uploads (with the {uploader,
+  caption, channel:"ha", ts} sidecar) into share/frame/incoming, and processes
+  each one inline (EXIF rotation, downscale, re-encode, strip EXIF) into
+  config/www/frame so the frame-os display PWA can read it at /local/frame/.
+  The only add-on in this project's ingest+process pipeline. Reachable via
+  Home Assistant Ingress by default — no port is opened on the host.
+version: "2.0.0"
 arch:
   - amd64
   - aarch64
@@ -28,12 +30,17 @@ panel_title: "Frame Photos"
 map:
   - type: share
     read_only: false
+  - type: homeassistant_config
+    read_only: false
+    path: /config
 
 options:
   upload_token: ""
   max_upload_mb: 25
   rate_limit_per_min: 12
   allowed_origins: "*"
+  max_long_edge: 1280
+  jpeg_quality: 85
 schema:
   # Required, at least 16 chars — Supervisor refuses to start the add-on until
   # a real secret is set (see ../README.md and DOCS.md for why this matters
@@ -42,3 +49,5 @@ schema:
   max_upload_mb: "int(1,100)"
   rate_limit_per_min: "int(1,120)"
   allowed_origins: "str"
+  max_long_edge: "int(320,4000)"
+  jpeg_quality: "int(50,100)"

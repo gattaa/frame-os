@@ -44,7 +44,7 @@ touching the processor or the PWA — that's the point.
 | `frame/`     | The PWA (Vite + TypeScript) — the display | **Reads** `photos/` + `manifest.json` |
 | `pipeline/`  | A mock-data generator only (dev tool for `frame/`) | N/A — the real processor lives in `haos-addons/` |
 | `ha/`        | Home Assistant YAML snippets | Provides live data + AC controls to the PWA |
-| `haos-addons/` | Home Assistant OS add-ons — the processor (`frame-pipeline`) and the ingest channel (`frame-uploader`), the **only** place either runs | **Only writer** of `photos/` + `manifest.json` (processor); ingest channel → writes `incoming/` (uploader) |
+| `haos-addons/` | A single Home Assistant OS add-on (`frame-uploader`) — ingest channel + processor combined, the **only** place either runs | **Only writer** of `incoming/`, `photos/`, and `manifest.json` — saves an upload, then processes it inline |
 | `data/`      | Runtime data (gitignored): `incoming/`, `photos/`, `manifest.json` | The files the contract is about |
 
 See each folder's own `README.md` for component-level notes.
@@ -75,10 +75,10 @@ cd frame && npm install && npm run dev
 ```
 
 That's the whole loop for local development. Real ingest only runs as the
-`frame-pipeline`/`frame-uploader` Home Assistant OS add-ons (see
-`haos-addons/`) — HAOS is the only place this project actually runs, so
-there's no standalone processor to run outside of it. See
-[`haos-addons/frame-pipeline/DOCS.md`](./haos-addons/frame-pipeline/DOCS.md)
+`frame-uploader` Home Assistant OS add-on (see `haos-addons/`) — HAOS is the
+only place this project actually runs, so there's no standalone processor to
+run outside of it. See
+[`haos-addons/frame-uploader/DOCS.md`](./haos-addons/frame-uploader/DOCS.md)
 for the full `<image>.meta.json`/`manifest.json` schema.
 
 ## Status
@@ -92,7 +92,7 @@ applied:
 |--------|-------|
 | `pipeline/` | Mock-data generator implemented and verified (dev tool only — see "Status" note above on where the real processor lives). |
 | `frame/` | PWA implemented: slideshow, HA-driven overlay + theming, offline service worker. `npm run build` passes with a verified Chrome-60 legacy bundle. |
-| `haos-addons/` | The processor (`frame-pipeline`) and ingest channel (`frame-uploader`) implemented and verified (idempotent, EXIF-safe downscaling, atomic writes, self-healing manifest; upload → `incoming/` → processor → manifest end-to-end). The sole ingest channel today — the contract stays channel-agnostic so more can be added later. Config validated; see each add-on's `DOCS.md` for what's verified vs. not (no live HAOS was available to build/run against in this environment). |
+| `haos-addons/` | The single `frame-uploader` add-on (ingest + inline processing) implemented and verified (idempotent, EXIF-safe downscaling, atomic writes; upload → `incoming/` → inline processing → manifest end-to-end, all within one request). The sole ingest channel today — the contract stays channel-agnostic so more could be added later. Config validated; see its `DOCS.md` for what's verified vs. not (no live HAOS was available to build/run against in this environment). |
 | `ha/` | Home Assistant package (night mode, override, brightness/screen automations) implemented and YAML-validated; entity IDs are placeholders pending your real ones. |
 
 **What's left before this runs on the real frame:** swap the placeholder

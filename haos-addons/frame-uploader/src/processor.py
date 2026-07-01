@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
-"""frame-os pipeline processor.
+"""frame-os photo processor.
 
 The single source of truth for the photo contract. It is the ONLY component
-allowed to write ``data/photos/`` and ``data/manifest.json``.
+allowed to write ``data/photos/`` and ``data/manifest.json``. Since the
+frame-uploader merge, this module is imported directly by ``app.py`` and run
+inline on every upload — it is no longer a separate polling service. See
+DOCS.md for why.
 
 Contract
 --------
-Ingest channels drop two files into ``incoming/`` for each photo:
+The uploader (the sole writer of ``incoming/``) drops two files per photo:
 
   1. an image                         e.g.  sunset.jpg
   2. a sidecar  ``<image>.meta.json`` e.g.  sunset.jpg.meta.json
      containing {"uploader", "caption", "channel", "ts"}
 
-The processor scans ``incoming/``, normalizes each settled image (honor EXIF
-rotation, downscale to <=1280px on the long edge, re-encode JPEG q~85, strip
-EXIF), writes it to ``photos/<id>.jpg``, and maintains ``manifest.json`` as a
-list of:
+``process_one()`` normalizes a single freshly-written image (honor EXIF
+rotation, downscale to <=MAX_LONG_EDGE px on the long edge, re-encode JPEG
+q~JPEG_QUALITY, strip EXIF), writes it to ``photos/<id>.jpg``, and updates
+``manifest.json`` — a list of:
 
   {id, file, uploader, caption, channel, ts, w, h}
 
 ``id`` is a content hash of the *source* image, so reruns never duplicate and
-the same photo dropped twice collapses to one entry. Manifest entries whose
-backing file has disappeared from ``photos/`` are pruned.
+the same photo dropped twice collapses to one entry.
 
-Run it two ways::
-
-    python processor.py            # one-shot: process whatever is waiting, exit
-    python processor.py --loop     # poll forever (default every 30s)
-
-See README.md for the full contract and meta.json schema.
+This file also keeps a one-shot, directory-scanning CLI (``run_once`` /
+``main``) for manually reprocessing anything stuck in ``incoming/`` (e.g.
+after a crash mid-write) — it is not a running service, just an occasional
+manual command. See README.md for the full contract and meta.json schema.
 """
 
 from __future__ import annotations
@@ -48,10 +48,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 # --- Tunables ---------------------------------------------------------------
-# Env vars let a wrapper (e.g. a Home Assistant add-on; see ../haos-addons/)
-# configure these without touching the file/manifest contract. CLI flags (see
-# main()) still take precedence over env vars, which take precedence over the
-# defaults below.
+# Env vars let the HAOS add-on wrapper configure these without touching the
+# file/manifest contract. CLI flags (see main()) still take precedence over
+# env vars, which take precedence over the defaults below.
 
 def _env_int(name: str, default: int) -> int:
     v = os.getenv(name)
@@ -63,21 +62,10 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _env_float(name: str, default: float) -> float:
-    v = os.getenv(name)
-    if not v:
-        return default
-    try:
-        return float(v)
-    except ValueError:
-        return default
-
-
 MAX_LONG_EDGE = _env_int("MAX_LONG_EDGE", 1280)   # downscale so the long edge is at most this many px
 JPEG_QUALITY = _env_int("JPEG_QUALITY", 85)       # re-encode quality
 SETTLE_SECONDS = 2.0      # ignore files touched more recently than this (in-flight writers)
 NO_META_GRACE = 120.0     # after this long with no sidecar, process with default meta + warn
-POLL_INTERVAL = _env_float("POLL_INTERVAL", 30.0)  # --loop poll cadency (seconds)
 ID_LEN = 16               # hex chars of the content hash kept as the id
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".heic"}
@@ -99,11 +87,12 @@ class Config:
     def from_args(cls, args: argparse.Namespace) -> "Config":
         """Resolve paths with precedence: CLI flag > env var > repo-relative default.
 
-        ``INCOMING_DIR`` and ``OUTPUT_DIR`` are the two env vars a wrapper sets
-        (``OUTPUT_DIR`` is the parent of ``photos/`` and ``manifest.json``,
-        mirroring this repo's ``data/`` layout) — see ../haos-addons/README.md.
+        ``INCOMING_DIR`` and ``OUTPUT_DIR`` are the two env vars the add-on
+        sets (``OUTPUT_DIR`` is the parent of ``photos/`` and
+        ``manifest.json``, mirroring this repo's ``data/`` layout) — see
+        ../DOCS.md.
         """
-        # repo root: this file lives at haos-addons/frame-pipeline/src/processor.py
+        # repo root: this file lives at haos-addons/frame-uploader/src/processor.py
         root = Path(__file__).resolve().parent.parent.parent.parent
         data_default = root / "data"
         incoming_env = os.getenv("INCOMING_DIR")
@@ -160,20 +149,37 @@ def file_age(path: Path, now: float) -> float:
         return 0.0
 
 
-def load_meta(image: Path, now: float) -> Optional[Dict[str, Any]]:
-    """Load and normalize the sidecar meta for ``image``.
-
-    Returns a dict on success. Returns ``None`` to mean "skip for now" — either
-    the sidecar is missing but the image is still within the grace window, or
-    the sidecar exists but is not yet valid JSON (likely mid-write).
-    """
-    meta_path = meta_path_for(image)
-    defaults = {
+def _default_meta(image: Path) -> Dict[str, Any]:
+    return {
         "uploader": "unknown",
         "caption": "",
         "channel": "unknown",
         "ts": _iso(image.stat().st_mtime),
     }
+
+
+def _normalize_meta(raw: Any, defaults: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        return defaults
+    meta = dict(defaults)
+    for key in ("uploader", "caption", "channel", "ts"):
+        if raw.get(key) not in (None, ""):
+            meta[key] = raw[key]
+    return meta
+
+
+def load_meta(image: Path, now: float) -> Optional[Dict[str, Any]]:
+    """Load and normalize the sidecar meta for ``image`` during a directory scan.
+
+    Returns a dict on success. Returns ``None`` to mean "skip for now" — either
+    the sidecar is missing but the image is still within the grace window, or
+    the sidecar exists but is not yet valid JSON (likely mid-write). Used by
+    the scanning CLI, where the file may have been dropped by anything and
+    could still be mid-write; the inline upload path uses
+    ``load_meta_immediate`` instead, since it wrote the file itself.
+    """
+    meta_path = meta_path_for(image)
+    defaults = _default_meta(image)
 
     if not meta_path.exists():
         if file_age(image, now) < NO_META_GRACE:
@@ -192,15 +198,25 @@ def load_meta(image: Path, now: float) -> Optional[Dict[str, Any]]:
         log.debug("sidecar for %s not parseable yet (%s); will retry", image.name, exc)
         return None
 
-    if not isinstance(raw, dict):
-        log.warning("sidecar for %s is not an object; using defaults", image.name)
-        return defaults
+    return _normalize_meta(raw, defaults)
 
-    meta = dict(defaults)
-    for key in ("uploader", "caption", "channel", "ts"):
-        if raw.get(key) not in (None, ""):
-            meta[key] = raw[key]
-    return meta
+
+def load_meta_immediate(image: Path) -> Dict[str, Any]:
+    """Load sidecar meta for an image the caller just finished writing itself
+    (uploader always writes the sidecar before revealing the image — see
+    app.py's ``_drop_into_incoming``), so there's no settle wait or "not ready
+    yet" case to handle."""
+    meta_path = meta_path_for(image)
+    defaults = _default_meta(image)
+    if not meta_path.exists():
+        log.warning("no sidecar for %s; using defaults", image.name)
+        return defaults
+    try:
+        raw = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("sidecar for %s not parseable (%s); using defaults", image.name, exc)
+        return defaults
+    return _normalize_meta(raw, defaults)
 
 
 def _iso(epoch: float) -> str:
@@ -279,7 +295,72 @@ def remove_source(image: Path) -> None:
             log.warning("could not remove %s: %s", src.name, exc)
 
 
-# --- Core -----------------------------------------------------------------
+# --- Inline single-file path (used by app.py on every upload) --------------
+
+def process_one(cfg: Config, image: Path) -> Optional[Dict[str, Any]]:
+    """Process one freshly-written image immediately and update the manifest.
+
+    No settle wait: the caller (app.py) just finished writing both the image
+    and its sidecar itself, so there's no risk of reading a partial file.
+    Returns the manifest entry (existing or newly published), or ``None`` if
+    the image was corrupt/undecodable (quarantined in that case — this
+    shouldn't happen in practice since app.py already validated the bytes
+    decode fully before saving, but is handled defensively).
+    """
+    cfg.photos.mkdir(parents=True, exist_ok=True)
+    cfg.manifest.parent.mkdir(parents=True, exist_ok=True)
+
+    manifest = load_manifest(cfg.manifest)
+    index: Dict[str, Dict[str, Any]] = {e["id"]: e for e in manifest if "id" in e}
+
+    try:
+        src = image.read_bytes()
+    except OSError as exc:
+        log.error("could not read %s: %s", image.name, exc)
+        return None
+    if not src:
+        log.warning("empty upload file %s", image.name)
+        return None
+
+    eid = content_id(src)
+
+    # Idempotent: already published and file present -> drop the source, reuse the entry.
+    if eid in index and index[eid].get("file") and (cfg.photos / index[eid]["file"]).exists():
+        log.info("duplicate %s -> %s (already published)", image.name, eid)
+        remove_source(image)
+        return index[eid]
+
+    meta = load_meta_immediate(image)
+
+    try:
+        jpeg, w, h = process_image(src)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        log.error("corrupt/undecodable %s (%s); quarantining", image.name, exc)
+        quarantine(image)
+        return None
+
+    out_name = f"{eid}.jpg"
+    atomic_write_bytes(cfg.photos / out_name, jpeg)
+    entry = {
+        "id": eid,
+        "file": out_name,
+        "uploader": meta["uploader"],
+        "caption": meta["caption"],
+        "channel": meta["channel"],
+        "ts": meta["ts"],
+        "w": w,
+        "h": h,
+    }
+    index[eid] = entry
+    remove_source(image)
+
+    new_manifest = sorted(index.values(), key=lambda e: (str(e.get("ts", "")), e["id"]))
+    atomic_write_json(cfg.manifest, new_manifest)
+    log.info("published %s -> %s (%dx%d, %s)", image.name, out_name, w, h, meta["channel"])
+    return entry
+
+
+# --- Directory-scanning path (manual reprocessing CLI only) ---------------
 
 def iter_incoming_images(incoming: Path) -> List[Path]:
     if not incoming.exists():
@@ -296,7 +377,13 @@ def iter_incoming_images(incoming: Path) -> List[Path]:
 
 
 def run_once(cfg: Config) -> int:
-    """Process all settled incoming images. Returns the number published."""
+    """Process all settled incoming images. Returns the number published.
+
+    This is the manual-reprocessing path (``python processor.py``), for when
+    something is stuck in ``incoming/`` (e.g. after a crash mid-upload). Normal
+    uploads never reach this function — they go through ``process_one``
+    inline in app.py.
+    """
     cfg.photos.mkdir(parents=True, exist_ok=True)
     cfg.manifest.parent.mkdir(parents=True, exist_ok=True)
 
@@ -380,24 +467,12 @@ def run_once(cfg: Config) -> int:
     return published
 
 
-def run_loop(cfg: Config, interval: float) -> None:
-    log.info("loop mode: polling %s every %.0fs (Ctrl-C to stop)", cfg.incoming, interval)
-    while True:
-        try:
-            run_once(cfg)
-        except Exception:  # never let one bad cycle kill the daemon
-            log.exception("unexpected error in processing cycle")
-        time.sleep(interval)
-
-
-# --- CLI ------------------------------------------------------------------
+# --- CLI (manual reprocessing only — not a running service) ----------------
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="frame-os photo pipeline processor")
-    parser.add_argument("--loop", action="store_true",
-                        help="run continuously, polling every --interval seconds")
-    parser.add_argument("--interval", type=float, default=POLL_INTERVAL,
-                        help=f"poll interval for --loop (default {POLL_INTERVAL:.0f}s)")
+    parser = argparse.ArgumentParser(
+        description="frame-os photo processor — one-shot manual reprocessing of incoming/"
+    )
     parser.add_argument("--incoming", help="override incoming/ dir")
     parser.add_argument("--photos", help="override photos/ dir")
     parser.add_argument("--manifest", help="override manifest.json path")
@@ -415,19 +490,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     log.info("photos  =%s", cfg.photos)
     log.info("manifest=%s", cfg.manifest)
 
-    # Create the shared dirs eagerly so they exist even before the first photo
-    # arrives (matters for wrappers like the HAOS add-ons, which mount these
-    # paths and expect them to be present as soon as the processor starts).
     cfg.incoming.mkdir(parents=True, exist_ok=True)
     cfg.photos.mkdir(parents=True, exist_ok=True)
     cfg.manifest.parent.mkdir(parents=True, exist_ok=True)
-
-    if args.loop:
-        try:
-            run_loop(cfg, args.interval)
-        except KeyboardInterrupt:
-            log.info("stopped")
-        return 0
 
     published = run_once(cfg)
     log.info("done: %d new photo%s", published, "" if published == 1 else "s")
