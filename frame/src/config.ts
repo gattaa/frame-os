@@ -162,7 +162,7 @@ export const SLIDESHOW = {
   MANIFEST_REFRESH_MS: Math.max(1000, Number(str("VITE_MANIFEST_REFRESH_MS", "60000")) || 60_000),
   /** Screen aspect ratio (1280x800). Photos whose aspect ratio deviates from
    *  this by more than ASPECT_DEVIATION_THRESHOLD get letterboxed/pillarboxed
-   *  with white bars instead of being cropped to fill. */
+   *  in black instead of being cropped to fill. */
   SCREEN_RATIO: 1280 / 800,
   ASPECT_DEVIATION_THRESHOLD: 0.15,
 } as const;

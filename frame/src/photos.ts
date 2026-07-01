@@ -5,9 +5,9 @@
  * image, then swap opacity for the crossfade. Images are fully static (no
  * zoom/pan) — object-fit:cover fills the 1280x800 panel by default, except
  * when a photo's aspect ratio deviates significantly from the screen's, in
- * which case it's letterboxed/pillarboxed with white bars instead of cropped
- * (see pickFit()). Ordered by `ts`. A small sender chip + caption is shown
- * per photo.
+ * which case it's letterboxed/pillarboxed in black instead of cropped (see
+ * pickFit()). Ordered by `ts`. A small sender chip + caption is shown per
+ * photo.
  */
 
 import { PATHS, SLIDESHOW } from "./config";
@@ -52,7 +52,7 @@ function preload(url: string): Promise<void> {
 }
 
 /** cover (fill, cropped) unless the photo's aspect ratio deviates significantly
- *  from the screen's, in which case contain (letterbox/pillarbox in white). */
+ *  from the screen's, in which case contain (letterbox/pillarbox in black). */
 function pickFit(w: number, h: number): "cover" | "contain" {
   if (!w || !h) return "cover";
   const ratio = w / h;
@@ -64,9 +64,6 @@ function applyFit(el: HTMLImageElement, entry: ManifestEntry): void {
   const contain = pickFit(entry.w, entry.h) === "contain";
   el.classList.toggle("fit-contain", contain);
   el.classList.toggle("fit-cover", !contain);
-  // Lets styles.css swap the overlay from "light text on photo" to "dark
-  // text/opaque chips on a white bar" — see the has-bars block there.
-  document.documentElement.classList.toggle("has-bars", contain);
 }
 
 async function show(entry: ManifestEntry): Promise<void> {
