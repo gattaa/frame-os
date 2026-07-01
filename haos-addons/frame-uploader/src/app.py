@@ -272,7 +272,7 @@ UPLOAD_PAGE_HTML = """<!DOCTYPE html>
 
   <label for="file">Photo</label>
   <div class="file-input">
-    <input id="file" type="file" accept="image/*" capture="environment">
+    <input id="file" type="file" accept="image/*">
   </div>
   <img id="preview" alt="">
 

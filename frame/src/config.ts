@@ -160,8 +160,11 @@ export const SLIDESHOW = {
   /** Re-fetch the manifest this often so photos added after boot appear
    *  without a reload (the frame is always-on). */
   MANIFEST_REFRESH_MS: Math.max(1000, Number(str("VITE_MANIFEST_REFRESH_MS", "60000")) || 60_000),
-  /** Slow Ken Burns pan/zoom on each photo. */
-  KEN_BURNS: bool("VITE_KEN_BURNS", true),
+  /** Screen aspect ratio (1280x800). Photos whose aspect ratio deviates from
+   *  this by more than ASPECT_DEVIATION_THRESHOLD get letterboxed/pillarboxed
+   *  with white bars instead of being cropped to fill. */
+  SCREEN_RATIO: 1280 / 800,
+  ASPECT_DEVIATION_THRESHOLD: 0.15,
 } as const;
 
 export const OVERLAY = {

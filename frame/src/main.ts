@@ -9,7 +9,7 @@
 
 import "./styles.css";
 import { DEV, USE_MOCK } from "./config";
-import { startSlideshow, toggleKenBurns } from "./photos";
+import { startSlideshow } from "./photos";
 import { startData } from "./data";
 import { startOverlay } from "./overlay";
 import { startTheme } from "./theme";
@@ -35,14 +35,6 @@ async function boot(): Promise<void> {
   startSlideshow();  // manifest + crossfade (async, non-blocking)
 
   registerServiceWorker();
-
-  // Dev affordance: press "k" to toggle Ken Burns.
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "k") {
-      const on = toggleKenBurns();
-      console.info(`[frame-os] Ken Burns ${on ? "on" : "off"}`);
-    }
-  });
 }
 
 void boot();

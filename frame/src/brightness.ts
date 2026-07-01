@@ -38,7 +38,12 @@ export async function setBrightness(level: number): Promise<void> {
   await send("setStringSetting", { key: "screenBrightness", value: String(clamped) });
 }
 
-/** Turn the screen on or off. */
+/** Turn the screen on or off. Fully wakes on touch, so screenOff is reversible. */
 export async function setScreenOn(on: boolean): Promise<void> {
   await send(on ? "screenOn" : "screenOff");
+}
+
+/** Soft-restart the Fully Kiosk app (not the frame/device itself). */
+export async function restartApp(): Promise<void> {
+  await send("restartApp");
 }

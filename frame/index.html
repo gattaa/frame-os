@@ -56,6 +56,58 @@
       </div>
 
       <div class="ov-badges" id="ac-badges"></div>
+
+      <!-- Floating controls: nav (prev/play-pause/next) + settings gear. Its
+           own auto-hide layer — fades fully out on idle, reappears on tap
+           (see .ov-controls in styles.css / dim()/wake() in overlay.ts). -->
+      <div class="ov-controls" id="ov-controls">
+        <div class="ov-nav" id="ov-nav">
+          <button type="button" class="nav-btn" id="nav-prev" aria-label="Previous photo">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6" /></svg>
+          </button>
+          <button type="button" class="nav-btn" id="nav-playpause" aria-label="Pause slideshow">
+            <svg id="nav-playpause-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M7 5h3v14H7zM14 5h3v14h-3z" /></svg>
+          </button>
+          <button type="button" class="nav-btn" id="nav-next" aria-label="Next photo">
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" /></svg>
+          </button>
+        </div>
+
+        <button type="button" class="gear-btn" id="settings-gear" aria-label="Settings">
+          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3.5 12a8.5 8.5 0 0 1 .16-1.64l-1.86-1.45 1.5-2.6 2.2.62c.5-.5 1.08-.92 1.72-1.24l.3-2.28h3l.3 2.28c.64.32 1.22.74 1.72 1.24l2.2-.62 1.5 2.6-1.86 1.45c.1.53.16 1.08.16 1.64s-.06 1.11-.16 1.64l1.86 1.45-1.5 2.6-2.2-.62c-.5.5-1.08.92-1.72 1.24l-.3 2.28h-3l-.3-2.28a6.9 6.9 0 0 1-1.72-1.24l-2.2.62-1.5-2.6 1.86-1.45c-.1-.53-.16-1.08-.16-1.64z" /></svg>
+        </button>
+
+        <div class="settings-panel" id="settings-panel">
+          <div class="settings-panel-header">
+            <span class="settings-panel-title">Display</span>
+            <button type="button" class="ac-panel-collapse" id="settings-close" aria-label="Close">
+              <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6" /></svg>
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <label class="ac-panel-label" for="brightness-slider">Brightness</label>
+            <input type="range" id="brightness-slider" min="0" max="255" step="1" value="200" />
+          </div>
+
+          <button type="button" class="settings-btn" id="settings-screen-off">
+            Screen off
+            <span class="settings-btn-sub">Wakes on touch — safe to tap</span>
+          </button>
+
+          <button type="button" class="settings-btn settings-btn-danger" id="settings-restart">
+            Restart display
+            <span class="settings-btn-sub">Soft-restarts the Fully Kiosk app, not the frame</span>
+          </button>
+          <div class="settings-confirm" id="settings-restart-confirm">
+            <p>Restart the display app now?</p>
+            <div class="settings-confirm-actions">
+              <button type="button" id="settings-restart-confirm-cancel">Cancel</button>
+              <button type="button" id="settings-restart-confirm-yes">Restart</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <span id="stale-dot" class="stale-dot" title="Showing last-known values"></span>

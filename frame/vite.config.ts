@@ -61,6 +61,9 @@ const BASE = "/local/frame/";
 // https://vite.dev/config/
 export default defineConfig({
   base: BASE,
+  server: {
+    port: Number(process.env.PORT) || 5173,
+  },
   // The frame's WebView is ~Chrome 60. The modern build floors at chrome61;
   // the legacy plugin below emits a fully-transpiled nomodule bundle for the
   // real device (Chrome 60 has no <script type=module> support).

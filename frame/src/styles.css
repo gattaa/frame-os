@@ -70,24 +70,28 @@ html, body {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;       /* fill 1280x800, cropping overflow */
   object-position: center;
   opacity: 0;
   transition: opacity 1200ms ease-in-out;
-  will-change: opacity, transform;
+  will-change: opacity;
 }
 
 .photo.is-front {
   opacity: 1;
 }
 
-/* Slow Ken Burns drift; subtle so it doesn't distract. */
-@keyframes kenburns {
-  from { transform: scale(1.0) translate(0, 0); }
-  to   { transform: scale(1.08) translate(var(--kb-x, 1%), var(--kb-y, 1%)); }
+/* Default: fill the panel, cropping overflow. Static — no zoom/pan. */
+.photo.fit-cover {
+  object-fit: cover;
+  background: transparent;
 }
-.photo.kenburns.is-front {
-  animation: kenburns 14s ease-out forwards;
+
+/* Aspect ratio deviates significantly from the 1280x800 screen: show the
+ * whole photo with pure white pillarbox/letterbox bars (matches the frame's
+ * white bezel) instead of cropping it. No blur-fill. */
+.photo.fit-contain {
+  object-fit: contain;
+  background: #ffffff;
 }
 
 #photo-meta {
@@ -440,6 +444,181 @@ html, body {
 }
 .ac-fan-tick.active {
   background: #fff;
+}
+
+/* --- Floating controls: nav (prev/play-pause/next) + settings gear ----------
+ * A distinct auto-hiding layer: unlike the AC badges (which only dim), these
+ * fully fade out and stop accepting touches while idle, then fade back in and
+ * re-enable on any tap — same dim/wake timer as the rest of the overlay (see
+ * overlay.ts), just a harder hide. */
+.ov-controls {
+  opacity: 1;
+  transition: opacity 500ms ease;
+}
+.overlay.ov-dim .ov-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ov-nav {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+}
+
+.nav-btn,
+.gear-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  padding: 0;
+  border: 1px solid var(--badge-line);
+  background: var(--badge-bg);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  -webkit-appearance: none;
+  appearance: none;
+}
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .nav-btn,
+  .gear-btn {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+.nav-btn svg,
+.gear-btn svg {
+  width: 24px;
+  height: 24px;
+}
+.nav-btn:active,
+.gear-btn:active {
+  background: var(--badge-bg-selected);
+}
+
+.gear-btn {
+  position: absolute;
+  bottom: 28px;
+  right: 40px;
+}
+
+/* Settings panel: anchored above the gear button, same solid-fill-first
+ * treatment as .ac-panel (blur is progressive enhancement only). */
+.settings-panel {
+  position: absolute;
+  bottom: 92px;
+  right: 40px;
+  width: 300px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-line);
+  border-radius: 20px;
+  padding: 20px 22px;
+  color: var(--panel-fg);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  display: none;
+}
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .settings-panel {
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+}
+.settings-panel.open {
+  display: block;
+}
+.settings-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.settings-panel-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.settings-row {
+  margin-bottom: 18px;
+}
+.settings-row input[type="range"] {
+  width: 100%;
+  accent-color: #fff;
+}
+.settings-btn {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-btn:active {
+  background: rgba(255, 255, 255, 0.22);
+}
+.settings-btn-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--panel-sub);
+}
+.settings-btn-danger {
+  background: rgba(232, 90, 90, 0.22);
+}
+.settings-btn-danger:active {
+  background: rgba(232, 90, 90, 0.34);
+}
+.settings-confirm {
+  margin-top: -2px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  display: none;
+}
+.settings-confirm.open {
+  display: block;
+}
+.settings-confirm p {
+  margin: 0 0 10px;
+  color: var(--panel-sub);
+}
+.settings-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.settings-confirm-actions button {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 9px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+#settings-restart-confirm-yes {
+  background: rgba(232, 90, 90, 0.85);
+  color: #fff;
+}
+#settings-restart-confirm-cancel {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 /* Stale dot: outside #overlay so it stays visible (dim, not gone) even while

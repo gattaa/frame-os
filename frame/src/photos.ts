@@ -2,9 +2,12 @@
  * Photo layer: read the manifest, preload, and crossfade a slideshow.
  *
  * Two stacked <img> elements alternate as front/back; we preload the next
- * image, then swap opacity for the crossfade. Photos are object-fit:cover for
- * the 1280x800 panel, ordered by `ts`, with an optional slow Ken Burns drift.
- * A small sender chip + caption is shown per photo.
+ * image, then swap opacity for the crossfade. Images are fully static (no
+ * zoom/pan) — object-fit:cover fills the 1280x800 panel by default, except
+ * when a photo's aspect ratio deviates significantly from the screen's, in
+ * which case it's letterboxed/pillarboxed with white bars instead of cropped
+ * (see pickFit()). Ordered by `ts`. A small sender chip + caption is shown
+ * per photo.
  */
 
 import { PATHS, SLIDESHOW } from "./config";
@@ -27,7 +30,7 @@ let frontIsA = true;
 let showing = false;       // a show() is mid-flight (preload + crossfade)
 let timer = 0;             // advance interval
 let refreshTimer = 0;      // manifest re-poll interval
-let kenBurns = SLIDESHOW.KEN_BURNS;
+let paused = false;        // auto-advance halted via the pause/play control
 
 const imgA = () => document.getElementById("photo-a") as HTMLImageElement;
 const imgB = () => document.getElementById("photo-b") as HTMLImageElement;
@@ -48,15 +51,19 @@ function preload(url: string): Promise<void> {
   });
 }
 
-function applyKenBurns(el: HTMLImageElement): void {
-  el.classList.remove("kenburns");
-  if (!kenBurns) return;
-  // Restart the animation by forcing reflow, then re-add the class.
-  // Randomize direction a little so consecutive photos differ.
-  void el.offsetWidth;
-  el.style.setProperty("--kb-x", (Math.random() * 4 - 2).toFixed(2) + "%");
-  el.style.setProperty("--kb-y", (Math.random() * 4 - 2).toFixed(2) + "%");
-  el.classList.add("kenburns");
+/** cover (fill, cropped) unless the photo's aspect ratio deviates significantly
+ *  from the screen's, in which case contain (letterbox/pillarbox in white). */
+function pickFit(w: number, h: number): "cover" | "contain" {
+  if (!w || !h) return "cover";
+  const ratio = w / h;
+  const deviation = Math.abs(ratio - SLIDESHOW.SCREEN_RATIO) / SLIDESHOW.SCREEN_RATIO;
+  return deviation > SLIDESHOW.ASPECT_DEVIATION_THRESHOLD ? "contain" : "cover";
+}
+
+function applyFit(el: HTMLImageElement, entry: ManifestEntry): void {
+  const contain = pickFit(entry.w, entry.h) === "contain";
+  el.classList.toggle("fit-contain", contain);
+  el.classList.toggle("fit-cover", !contain);
 }
 
 async function show(entry: ManifestEntry): Promise<void> {
@@ -74,7 +81,7 @@ async function show(entry: ManifestEntry): Promise<void> {
     if (!back || !front) return;
 
     back.src = url;
-    applyKenBurns(back);
+    applyFit(back, entry);
 
     // Update caption/chip for the incoming photo. The chip line is
     // "uploader · D Mon" (either half optional); the caption is the message.
@@ -104,12 +111,29 @@ function advance(): void {
 
 function schedule(): void {
   if (timer) window.clearInterval(timer);
+  timer = 0;
+  if (paused) return;
   timer = window.setInterval(advance, SLIDESHOW.INTERVAL_MS);
 }
 
-export function toggleKenBurns(): boolean {
-  kenBurns = !kenBurns;
-  return kenBurns;
+/** True while auto-advance is halted via the pause/play control. */
+export function isPaused(): boolean {
+  return paused;
+}
+
+/** Pause/resume auto-advance (pause/play toggle button). Returns the new paused state. */
+export function togglePause(): boolean {
+  paused = !paused;
+  schedule();
+  return paused;
+}
+
+/** Skip/back buttons: jump immediately and reset the auto-advance countdown. */
+export function stepPhoto(delta: 1 | -1): void {
+  if (entries.length === 0 || showing) return;
+  idx = (idx + delta + entries.length) % entries.length;
+  void show(entries[idx]);
+  schedule();
 }
 
 /** Fetch + sort the manifest. Returns null on failure (keep what we have). */

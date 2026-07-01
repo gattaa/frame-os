@@ -53,13 +53,13 @@ support, so it loads the **nomodule legacy bundle**.
 | File | Responsibility |
 |------|----------------|
 | `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `BATTERY_STATUS`, `HOUSE_POWER`, `CLIMATES` — one or more `climate.*` entities), HA base URL + token (loaded at runtime, see below), Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths, behaviour tunables. |
-| `src/photos.ts` | Reads `manifest.json`, preloads, crossfades every ~12s, `object-fit:cover`, optional Ken Burns (toggle with **k** in dev), ordered by `ts`, with a sender chip + caption. |
+| `src/photos.ts` | Reads `manifest.json`, preloads, crossfades every ~12s. Images are fully static — `object-fit:cover` by default, or `contain` with pure-white letterbox/pillarbox bars when a photo's aspect ratio deviates significantly from the 1280x800 screen. Ordered by `ts`, with a sender chip + caption. Exposes pause/resume/step for the nav controls. |
 | `src/data.ts` | Subscribes to HA entities via `home-assistant-js-websocket`; mirrors every update to IndexedDB; falls back to last-known on disconnect / offline / mock and flags it **stale**. Never crashes on missing entities. |
 | `src/idb.ts` | Tiny promise-based IndexedDB key/value store (hand-written, no dep). |
 | `src/format.ts` | Shared `D Mon` date formatting, used by both the clock and photo captions. |
-| `src/overlay.ts` | Transparent control-center overlay: clock/date/weather/battery/power top-right, one tappable badge per AC room top-left (tap to expand a setpoint/mode/fan panel, calls HA climate services). Wakes to full opacity on touch, dims again after inactivity. |
+| `src/overlay.ts` | Transparent control-center overlay: clock/date/weather/battery/power top-right, one tappable badge per AC room top-left (tap to expand a setpoint/mode/fan panel, calls HA climate services), prev/pause-play/next photo controls + a settings gear (brightness/screen-off/restart via Fully Kiosk REST) bottom center/right. The nav+gear layer fully fades out on idle and reappears on touch; wakes to full opacity on touch, dims again after inactivity. |
 | `src/theme.ts` | `startTheme()` — light/dark driven by HA `input_boolean.frame_night_mode` (via the data layer). Optionally nudges PWA brightness on transitions. |
-| `src/brightness.ts` | `setBrightness(0–255)` / `setScreenOn(bool)` → Fully Kiosk REST. Gated by config so it no-ops in desktop dev. |
+| `src/brightness.ts` | `setBrightness(0–255)` / `setScreenOn(bool)` / `restartApp()` → Fully Kiosk REST. Gated by config so it no-ops in desktop dev. |
 | `src/main.ts` | Boot + service-worker registration. |
 | `public/sw.js` | Hand-written, Chrome-60-safe service worker (see Offline). |
 | `public/manifest.webmanifest` | PWA manifest (fullscreen, landscape). |

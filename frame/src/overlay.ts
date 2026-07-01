@@ -16,6 +16,8 @@ import {
 } from "./data";
 import type { AcState, FrameState } from "./data";
 import { formatShortDate, pad } from "./format";
+import { restartApp, setBrightness, setScreenOn } from "./brightness";
+import { isPaused, stepPhoto, togglePause } from "./photos";
 
 let dimTimer = 0;
 
@@ -165,6 +167,10 @@ const ICON_SNOWFLAKE = `<svg viewBox="0 0 24 24"><g fill="none" stroke="currentC
   <path d="M19.5 6.5l-.5 2.7M19.5 6.5l-2.7-.5M4.5 17.5l.5-2.7M4.5 17.5l2.7.5"/>
 </g></svg>`;
 const ICON_CHEVRON = `<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6"/></svg>`;
+// Path-only (no <svg> wrapper) so they can be swapped via .innerHTML on the
+// existing <svg id="nav-playpause-icon"> element in index.html.
+const ICON_PAUSE_PATH = `<path fill="currentColor" d="M7 5h3v14H7zM14 5h3v14h-3z"/>`;
+const ICON_PLAY_PATH = `<path fill="currentColor" d="M8 5l11 7-11 7z"/>`;
 
 /** Which room's panel is expanded, or null when all badges are collapsed. */
 let selectedAcId: string | null = null;
@@ -361,6 +367,74 @@ function renderAcs(acs: AcState[]): void {
   renderPanel(acs);
 }
 
+// --- Photo nav: prev / play-pause / next --------------------------------
+
+function updatePlayPauseIcon(): void {
+  const icon = el("nav-playpause-icon");
+  const btn = el<HTMLButtonElement>("nav-playpause");
+  const paused = isPaused();
+  if (icon) icon.innerHTML = paused ? ICON_PLAY_PATH : ICON_PAUSE_PATH;
+  if (btn) btn.setAttribute("aria-label", paused ? "Resume slideshow" : "Pause slideshow");
+}
+
+function wireNav(): void {
+  el<HTMLButtonElement>("nav-prev")?.addEventListener("click", () => stepPhoto(-1));
+  el<HTMLButtonElement>("nav-next")?.addEventListener("click", () => stepPhoto(1));
+  el<HTMLButtonElement>("nav-playpause")?.addEventListener("click", () => {
+    togglePause();
+    updatePlayPauseIcon();
+  });
+  updatePlayPauseIcon();
+}
+
+// --- Settings panel (Fully Kiosk: brightness / screen off / restart) ----
+
+let settingsOpen = false;
+
+function renderSettings(): void {
+  const panel = el("settings-panel");
+  if (panel) panel.classList.toggle("open", settingsOpen);
+  if (!settingsOpen) hideRestartConfirm();
+}
+
+function hideRestartConfirm(): void {
+  el("settings-restart-confirm")?.classList.remove("open");
+}
+
+function closeSettings(): void {
+  if (!settingsOpen) return;
+  settingsOpen = false;
+  renderSettings();
+}
+
+function wireSettings(): void {
+  el<HTMLButtonElement>("settings-gear")?.addEventListener("click", () => {
+    settingsOpen = !settingsOpen;
+    renderSettings();
+  });
+  el<HTMLButtonElement>("settings-close")?.addEventListener("click", closeSettings);
+
+  const slider = el<HTMLInputElement>("brightness-slider");
+  slider?.addEventListener("input", () => {
+    void setBrightness(Number(slider.value));
+  });
+
+  el<HTMLButtonElement>("settings-screen-off")?.addEventListener("click", () => {
+    void setScreenOn(false);
+  });
+
+  // Restart is destructive-ish (kicks the user off the kiosk app briefly), so
+  // it requires an inline confirm step rather than firing on first tap.
+  el<HTMLButtonElement>("settings-restart")?.addEventListener("click", () => {
+    el("settings-restart-confirm")?.classList.add("open");
+  });
+  el<HTMLButtonElement>("settings-restart-confirm-cancel")?.addEventListener("click", hideRestartConfirm);
+  el<HTMLButtonElement>("settings-restart-confirm-yes")?.addEventListener("click", () => {
+    hideRestartConfirm();
+    void restartApp();
+  });
+}
+
 // --- Top-level render ---------------------------------------------------
 
 function render(s: FrameState): void {
@@ -389,6 +463,9 @@ function dim(): void {
     selectedAcId = null;
     renderAcs(getState().acs);
   }
+  // The nav/gear layer fades to fully hidden on dim (see .ov-controls) — close
+  // the settings panel with it rather than leaving it open-but-invisible.
+  closeSettings();
 }
 
 function wake(): void {
@@ -406,9 +483,12 @@ export function startOverlay(): void {
   window.setInterval(tickClock, 1000);
 
   onState(render);
+  wireNav();
+  wireSettings();
 
   // Any touch/click/move wakes the overlay to full opacity; it dims itself
-  // again after OVERLAY.DIM_AFTER_MS of inactivity.
+  // again after OVERLAY.DIM_AFTER_MS of inactivity. touchstart/pointerdown
+  // cover touch input, not just mouse.
   for (const evt of ["pointerdown", "touchstart", "mousemove", "keydown"]) {
     window.addEventListener(evt, wake, { passive: true });
   }
