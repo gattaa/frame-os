@@ -107,11 +107,27 @@ python processor.py --incoming /path/in --photos /path/out --manifest /path/mani
 Defaults resolve to the repo's `data/` dir (`data/incoming`, `data/photos`,
 `data/manifest.json`) regardless of the working directory.
 
+### Configuring paths without CLI flags (env vars)
+
+A wrapper (e.g. a Home Assistant OS add-on — see
+[`../haos-addons/frame-pipeline/`](../haos-addons/frame-pipeline/)) can set
+these instead of passing `--incoming`/`--photos`/`--manifest`. Precedence is
+**CLI flag > env var > repo-relative default**; nothing about the file/manifest
+contract changes, only where the files live.
+
+| Env var | Effect |
+|---|---|
+| `INCOMING_DIR` | overrides the `incoming/` dir |
+| `OUTPUT_DIR` | parent of the output — `photos/` and `manifest.json` resolve to `$OUTPUT_DIR/photos` and `$OUTPUT_DIR/manifest.json` |
+| `POLL_INTERVAL` | default for `--interval` (seconds) |
+| `MAX_LONG_EDGE` | default for the long-edge downscale cap (px) |
+| `JPEG_QUALITY` | default re-encode quality |
+
 ### Tunables
 
-Constants at the top of `processor.py`: `MAX_LONG_EDGE` (1280), `JPEG_QUALITY`
-(85), `SETTLE_SECONDS` (2), `NO_META_GRACE` (120), `POLL_INTERVAL` (30),
-`ID_LEN` (16).
+Constants at the top of `processor.py`: `MAX_LONG_EDGE` (1280, env-overridable),
+`JPEG_QUALITY` (85, env-overridable), `SETTLE_SECONDS` (2), `NO_META_GRACE`
+(120), `POLL_INTERVAL` (30, env-overridable), `ID_LEN` (16).
 
 ## Mock data (run the PWA with zero backend)
 
@@ -131,3 +147,9 @@ Produces under `../data/`:
   state objects, so the PWA's mapping code is exercised the same way).
 
 All of `data/`'s contents are gitignored; regenerate any time.
+
+## Running as a Home Assistant OS add-on
+
+To have the Supervisor manage this (auto-restart, survives reboots) instead of
+running it as a bare process or in docker-compose, see
+[`../haos-addons/frame-pipeline/`](../haos-addons/frame-pipeline/).

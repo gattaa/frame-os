@@ -30,8 +30,11 @@ path as ordinary data.
 ## Sidecar API
 
 - `POST /upload` — multipart form: `file` (the image), `uploader`, `caption`.
-  - Validates the bytes really are an image (Pillow) and enforces
-    `MAX_UPLOAD_MB`.
+  - Validates the bytes really are an image (Pillow, full decode — not just a
+    header check, so a truncated upload is rejected instead of silently
+    quarantined later) and enforces `MAX_UPLOAD_MB`.
+  - Rate-limited to `RATE_LIMIT_PER_MIN` uploads per client per rolling 60s
+    window (`429` beyond that).
   - Writes `incoming/<id>.<ext>` + `incoming/<id>.<ext>.meta.json`
     (`channel: "ha"`). The sidecar is written **before** the image is revealed,
     so the processor never sees an image without its meta.
@@ -40,7 +43,9 @@ path as ordinary data.
 - `GET /health` — liveness probe.
 
 Config is env-driven — see [`.env.example`](./.env.example): `INCOMING_DIR`,
-`MAX_UPLOAD_MB`, `ALLOWED_ORIGINS` (CORS), `UPLOAD_TOKEN`.
+`MAX_UPLOAD_MB`, `ALLOWED_ORIGINS` (CORS), `UPLOAD_TOKEN`, `RATE_LIMIT_PER_MIN`
+(default 12), and `RESTRICT_TO_SUPERVISOR` (only relevant when run as the
+Home Assistant OS add-on behind Ingress — see below; leave unset/false here).
 
 ## Run it
 
@@ -112,6 +117,15 @@ location /frame-upload/ {
 
 With this route, `POST https://ha.example.com/frame-upload/upload` reaches the
 sidecar, and `sidecar_url` in the card is `https://ha.example.com/frame-upload/upload`.
+
+## Running as a Home Assistant OS add-on
+
+As an alternative to the Docker/nginx setup above, [`../haos-addons/frame-uploader/`](../haos-addons/frame-uploader/)
+wraps this same sidecar as a Supervisor-managed add-on reachable via **HA
+Ingress** — no port opened on the host at all, plus everything above still
+applies as defense-in-depth. See that folder's `DOCS.md` for the security
+tradeoffs, the updated Lovelace card config, and a fully-tested mapped-port
+fallback if you'd rather not use ingress.
 
 ## Status
 

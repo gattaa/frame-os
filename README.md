@@ -43,6 +43,7 @@ touching the processor or the PWA — that's the point.
 | `uploader/`  | FastAPI sidecar + custom Lovelace upload card | Ingest channel → writes `incoming/` |
 | `telegram/`  | Standalone bootstrap bot (test harness + fallback) | Ingest channel → writes `incoming/` |
 | `ha/`        | Home Assistant YAML snippets | Provides live data + AC controls to the PWA |
+| `haos-addons/` | Home Assistant OS add-on wrappers for `pipeline/`, `uploader/`, `telegram/` | Same channels/processor, Supervisor-managed (survives reboots) |
 | `data/`      | Runtime data (gitignored): `incoming/`, `photos/`, `manifest.json` | The files the contract is about |
 
 See each folder's own `README.md` for component-level notes.
@@ -91,9 +92,11 @@ applied:
 | `uploader/` | FastAPI sidecar + Lovelace card implemented; verified end-to-end (upload → `incoming/` → processor → manifest). |
 | `telegram/` | Bootstrap/fallback bot implemented; verified end-to-end with the same drop contract as the uploader. |
 | `ha/` | Home Assistant package (night mode, override, brightness/screen automations) implemented and YAML-validated; entity IDs are placeholders pending your real ones. |
+| `haos-addons/` | Optional: run `pipeline/`, `uploader/`, `telegram/` as Home Assistant OS add-ons instead of docker-compose/bare processes. Config validated; see its README for what's verified vs. not (no live HAOS was available to build/run against in this environment). |
 
 **What's left before this runs on the real frame:** swap the placeholder
 entity IDs in `ha/packages/frame.yaml` and `frame/.env` for your real Home
 Assistant entities (see `ha/README.md`), and deploy `uploader/` behind your
-nginx reverse proxy. No further feature work is planned — see each folder's own
-`README.md` for details.
+nginx reverse proxy (either directly or via the `haos-addons/` add-on). No
+further feature work is planned — see each folder's own `README.md` for
+details.

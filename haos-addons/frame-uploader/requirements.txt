@@ -1,0 +1,14 @@
+# Alpine/musl-appropriate pins for this add-on (see ../sync.sh — this file is
+# NOT synced from ../../uploader/requirements.txt, maintained separately).
+#
+# NOTE: plain `uvicorn`, not the `uvicorn[standard]` extra used by the
+# canonical docker-compose deployment. [standard] pulls in uvloop + httptools,
+# which add real-but-unverified musl-wheel risk on Alpine in this project's
+# dev environment (no live build was run against actual HAOS hardware). Plain
+# uvicorn is pure-Python (asyncio + h11) and this add-on's throughput needs
+# (a handful of family photo uploads) do not benefit meaningfully from
+# uvloop's event-loop speedup anyway.
+fastapi>=0.110,<0.116
+uvicorn>=0.27,<0.31
+python-multipart>=0.0.9,<0.1
+Pillow>=10,<13

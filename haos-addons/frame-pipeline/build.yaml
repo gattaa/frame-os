@@ -1,0 +1,13 @@
+# Per-arch base images for this add-on, consumed by the Supervisor's local
+# builder (still supported for backward compatibility as of Supervisor
+# 2026.x, though the platform's newer preferred path is a bare `FROM` in the
+# Dockerfile using a multi-platform manifest image — see ../README.md for the
+# tradeoff and how to migrate later if you want to get ahead of the
+# deprecation).
+#
+# Tags verified to exist for BOTH archs at the time this was written:
+#   ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.24
+#   ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.24
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.24"
+  aarch64: "ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.24"

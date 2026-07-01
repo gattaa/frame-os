@@ -82,6 +82,12 @@ processor's next pass.
   through network interruptions; per-update errors are logged via an error
   handler and the bot keeps running.
 
+## Running as a Home Assistant OS add-on
+
+To have the Supervisor manage this (auto-restart, survives reboots) instead of
+running it as a bare process, see
+[`../haos-addons/frame-telegram/`](../haos-addons/frame-telegram/).
+
 ## Status
 
 Implemented. Standalone bootstrap/fallback ingest channel; identical drop

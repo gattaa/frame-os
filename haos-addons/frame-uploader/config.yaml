@@ -1,0 +1,41 @@
+name: "frame-os Uploader"
+slug: "frame_uploader"
+description: >-
+  FastAPI ingest sidecar for frame-os. Accepts photo uploads from the
+  frame-os-upload-card Lovelace card and drops them (with the shared
+  {uploader, caption, channel:"ha", ts} sidecar) into share/frame/incoming for
+  the frame-pipeline add-on to pick up. Reachable via Home Assistant Ingress
+  by default — no port is opened on the host.
+version: "1.0.0"
+arch:
+  - amd64
+  - aarch64
+init: false
+boot: auto
+startup: services
+
+# Ingress: no `ports:` key here at all, so nothing is published to the host.
+# The container is only reachable through the Supervisor's ingress proxy
+# (172.30.32.2), which is also enforced at the application layer — see
+# RESTRICT_TO_SUPERVISOR in run.sh / ../../uploader/app.py.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:image-plus
+
+map:
+  - type: share
+    read_only: false
+
+options:
+  upload_token: ""
+  max_upload_mb: 25
+  rate_limit_per_min: 12
+  allowed_origins: "*"
+schema:
+  # Required, at least 16 chars — Supervisor refuses to start the add-on until
+  # a real secret is set (see ../README.md and DOCS.md for why this matters
+  # even behind ingress).
+  upload_token: "match(^.{16,}$)"
+  max_upload_mb: "int(1,100)"
+  rate_limit_per_min: "int(1,120)"
+  allowed_origins: "str"

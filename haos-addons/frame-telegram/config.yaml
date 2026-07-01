@@ -1,0 +1,25 @@
+name: "frame-os Telegram Bot"
+slug: "frame_telegram"
+description: >-
+  Standalone Telegram bootstrap/fallback ingest channel for frame-os. Listens
+  to an allowlisted chat/group and drops received photos (with the shared
+  {uploader, caption, channel:"telegram", ts} sidecar) into share/frame/incoming
+  for the frame-pipeline add-on to pick up.
+version: "1.0.0"
+arch:
+  - amd64
+  - aarch64
+init: false
+boot: auto
+startup: services
+
+map:
+  - type: share
+    read_only: false
+
+options:
+  bot_token: ""
+  allowed_chat_ids: ""
+schema:
+  bot_token: "password"
+  allowed_chat_ids: "str"
