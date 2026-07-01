@@ -62,7 +62,38 @@ See each folder's own `README.md` for component-level notes.
 
 Full detail and rationale: [`CLAUDE.md`](./CLAUDE.md).
 
+## Quickstart (mock data, no Home Assistant required)
+
+```bash
+# 1. Generate 6 placeholder photos + manifest.json + mock-entities.json
+python pipeline/gen_mock.py
+
+# 2. Run the display against the mock data
+cd frame && npm install && npm run dev
+```
+
+That's the whole loop for local development. To try real ingest instead of
+mock data, drop an image + a hand-written `<image>.meta.json` into
+`data/incoming/` (see `pipeline/README.md` for the schema) and run
+`python pipeline/processor.py`.
+
 ## Status
 
-**Scaffold only.** Folder skeleton, docs, and the architecture contract are in
-place. No features built yet.
+**All five components are implemented and have been smoke-tested end-to-end**
+(mock generation → processor → manifest → PWA, and both real ingest channels →
+processor → PWA), then passed a full code review with the resulting fixes
+applied:
+
+| Folder | State |
+|--------|-------|
+| `pipeline/` | Processor + mock generator implemented and verified (idempotent, EXIF-safe downscaling, atomic writes, self-healing manifest). |
+| `frame/` | PWA implemented: slideshow, HA-driven overlay + theming, offline service worker. `npm run build` passes with a verified Chrome-60 legacy bundle. |
+| `uploader/` | FastAPI sidecar + Lovelace card implemented; verified end-to-end (upload → `incoming/` → processor → manifest). |
+| `telegram/` | Bootstrap/fallback bot implemented; verified end-to-end with the same drop contract as the uploader. |
+| `ha/` | Home Assistant package (night mode, override, brightness/screen automations) implemented and YAML-validated; entity IDs are placeholders pending your real ones. |
+
+**What's left before this runs on the real frame:** swap the placeholder
+entity IDs in `ha/packages/frame.yaml` and `frame/.env` for your real Home
+Assistant entities (see `ha/README.md`), and deploy `uploader/` behind your
+nginx reverse proxy. No further feature work is planned — see each folder's own
+`README.md` for details.
