@@ -6,14 +6,19 @@
  * zoom/pan) — object-fit:cover fills the 1280x800 panel by default, except
  * when a photo's aspect ratio deviates significantly from the screen's, in
  * which case it's letterboxed/pillarboxed in black instead of cropped (see
- * pickFit()). Ordered by `ts`. A small sender chip + caption is shown per
- * photo.
+ * pickFit()). A small sender chip + caption is shown per photo.
+ *
+ * `entries` holds the full manifest (ts-ascending, for the gallery). The
+ * always-on slideshow only cycles a subset — `rotation` — of every
+ * `favourite` photo (regardless of age) plus the 10 newest non-favourites,
+ * shuffled together and reshuffled on every full pass (see computeRotation()
+ * / rebuildRotation()) so it doesn't feel like a fixed loop.
  */
 
-import { PATHS, SLIDESHOW } from "./config";
+import { PATHS, SLIDESHOW, UPLOADER, favouriteUrl } from "./config";
 import { formatShortDate } from "./format";
 
-interface ManifestEntry {
+export interface ManifestEntry {
   id: string;
   file: string;
   uploader: string;
@@ -22,15 +27,23 @@ interface ManifestEntry {
   ts: string;
   w: number;
   h: number;
+  /** Defaults to false — additive field, older manifest entries may lack it. */
+  favourite: boolean;
+  /** Filename in thumbs/ for the gallery grid; "" if not generated (yet). */
+  thumb: string;
 }
 
+/** Full manifest, ts-ascending — the gallery's source list. */
 let entries: ManifestEntry[] = [];
+/** Shuffled always-on rotation subset the slideshow actually cycles through. */
+let rotation: ManifestEntry[] = [];
 let idx = 0;
 let frontIsA = true;
 let showing = false;       // a show() is mid-flight (preload + crossfade)
 let timer = 0;             // advance interval
 let refreshTimer = 0;      // manifest re-poll interval
 let paused = false;        // auto-advance halted via the pause/play control
+let galleryOpen = false;   // auto-advance halted while the gallery/lightbox is open
 
 const imgA = () => document.getElementById("photo-a") as HTMLImageElement;
 const imgB = () => document.getElementById("photo-b") as HTMLImageElement;
@@ -38,8 +51,52 @@ const metaEl = () => document.getElementById("photo-meta") as HTMLElement;
 const chipEl = () => document.getElementById("sender-chip") as HTMLElement;
 const captionEl = () => document.getElementById("caption") as HTMLElement;
 
-function photoUrl(file: string): string {
+export function photoUrl(file: string): string {
   return `${PATHS.PHOTOS_BASE}/${file}`;
+}
+
+export function thumbUrl(file: string): string {
+  return `${PATHS.THUMBS_BASE}/${file}`;
+}
+
+const RECENT_NON_FAVOURITE_COUNT = 10;
+
+function shuffle<T>(list: T[]): T[] {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** All favourites (any age) + the 10 newest non-favourites, shuffled
+ *  together (not segregated) so favourites and recents interleave. */
+function computeRotation(list: ManifestEntry[]): ManifestEntry[] {
+  const favourites = list.filter((e) => e.favourite);
+  const favIds = new Set(favourites.map((e) => e.id));
+  const nonFavourites = list
+    .filter((e) => !favIds.has(e.id))
+    .sort((a, b) => String(b.ts).localeCompare(String(a.ts))); // newest first
+  const recent = nonFavourites.slice(0, RECENT_NON_FAVOURITE_COUNT);
+  return shuffle([...favourites, ...recent]);
+}
+
+/** Recompute the rotation from the current `entries` and reshuffle it.
+ *  Called on load, on every manifest refresh, on a favourite toggle, and
+ *  when a full pass completes (see advance()) — membership can change any
+ *  of those times, so a fresh shuffle each time is simpler than patching an
+ *  existing array in place, and still satisfies "reshuffled each pass"
+ *  (pass completion always triggers this). Keeps showing the same photo
+ *  (by id) if it's still in the new rotation; otherwise restarts at 0. */
+function rebuildRotation(preserveId?: string): void {
+  rotation = computeRotation(entries);
+  if (rotation.length === 0) {
+    idx = 0;
+    return;
+  }
+  const found = preserveId ? rotation.findIndex((e) => e.id === preserveId) : -1;
+  idx = found >= 0 ? found : 0;
 }
 
 function preload(url: string): Promise<void> {
@@ -104,15 +161,19 @@ async function show(entry: ManifestEntry): Promise<void> {
 }
 
 function advance(): void {
-  if (entries.length === 0 || showing) return;
-  idx = (idx + 1) % entries.length;
-  void show(entries[idx]);
+  if (rotation.length === 0 || showing) return;
+  idx += 1;
+  if (idx >= rotation.length) {
+    // Completed a full pass: reshuffle for the next one.
+    rebuildRotation();
+  }
+  void show(rotation[idx]);
 }
 
 function schedule(): void {
   if (timer) window.clearInterval(timer);
   timer = 0;
-  if (paused) return;
+  if (paused || galleryOpen) return;
   timer = window.setInterval(advance, SLIDESHOW.INTERVAL_MS);
 }
 
@@ -130,10 +191,52 @@ export function togglePause(): boolean {
 
 /** Skip/back buttons: jump immediately and reset the auto-advance countdown. */
 export function stepPhoto(delta: 1 | -1): void {
-  if (entries.length === 0 || showing) return;
-  idx = (idx + delta + entries.length) % entries.length;
-  void show(entries[idx]);
+  if (rotation.length === 0 || showing) return;
+  idx = (idx + delta + rotation.length) % rotation.length;
+  void show(rotation[idx]);
   schedule();
+}
+
+/** Halt auto-advance while the gallery/lightbox is open (separate from the
+ *  user-facing pause/play toggle, so opening/closing the gallery doesn't
+ *  clobber a pause the user already set). */
+export function pauseForGallery(): void {
+  galleryOpen = true;
+  schedule();
+}
+
+/** Resume auto-advance when the gallery/lightbox closes (no-op if the user
+ *  had separately paused via the pause/play control — schedule() checks both). */
+export function resumeFromGallery(): void {
+  galleryOpen = false;
+  schedule();
+}
+
+/** The photo currently on screen in the main slideshow, or null before the
+ *  first photo has loaded. */
+export function getCurrentEntry(): ManifestEntry | null {
+  return rotation[idx] || null;
+}
+
+/** Full manifest (every photo, favourite or not) for the gallery grid. */
+export function getAllEntries(): ManifestEntry[] {
+  return entries.slice();
+}
+
+function normalizeEntry(e: Partial<ManifestEntry>): ManifestEntry {
+  return {
+    id: String(e.id || ""),
+    file: String(e.file || ""),
+    uploader: String(e.uploader || ""),
+    caption: String(e.caption || ""),
+    channel: String(e.channel || ""),
+    ts: String(e.ts || ""),
+    w: Number(e.w) || 0,
+    h: Number(e.h) || 0,
+    // Additive fields (see CLAUDE.md): tolerate older entries missing them.
+    favourite: e.favourite === true,
+    thumb: typeof e.thumb === "string" ? e.thumb : "",
+  };
 }
 
 /** Fetch + sort the manifest. Returns null on failure (keep what we have). */
@@ -141,9 +244,10 @@ async function fetchManifest(): Promise<ManifestEntry[] | null> {
   try {
     const res = await fetch(PATHS.MANIFEST, { cache: "no-cache" });
     if (!res.ok) throw new Error(`manifest ${res.status}`);
-    const data = (await res.json()) as ManifestEntry[];
-    const list = Array.isArray(data) ? data.slice() : [];
-    // Order by ts ascending for a stable, chronological slideshow.
+    const data = (await res.json()) as Partial<ManifestEntry>[];
+    const list = Array.isArray(data) ? data.map(normalizeEntry) : [];
+    // Order by ts ascending — a stable base list; the rotation shuffles its
+    // own subset independently (see computeRotation()).
     list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     return list;
   } catch (err) {
@@ -152,24 +256,16 @@ async function fetchManifest(): Promise<ManifestEntry[] | null> {
   }
 }
 
-/** Adopt a refreshed manifest, preserving the current photo by id. */
+/** Adopt a refreshed manifest, preserving the current photo by id if it's
+ *  still in the rotation. */
 function applyEntries(list: ManifestEntry[]): void {
   const wasEmpty = entries.length === 0;
-  const currentId = entries.length > 0 ? entries[idx].id : undefined;
+  const currentId = rotation[idx] ? rotation[idx].id : undefined;
   entries = list;
-  if (entries.length === 0) {
-    idx = 0;
-    return;
-  }
-  if (currentId) {
-    const found = entries.findIndex((e) => e.id === currentId);
-    idx = found >= 0 ? found : Math.min(idx, entries.length - 1);
-  } else {
-    idx = 0;
-  }
+  rebuildRotation(currentId);
   // If we previously had nothing on screen, start the show now.
-  if (wasEmpty) {
-    void show(entries[idx]);
+  if (wasEmpty && rotation.length > 0) {
+    void show(rotation[idx]);
     schedule();
   }
 }
@@ -179,9 +275,9 @@ export async function startSlideshow(): Promise<void> {
   const list = await fetchManifest();
   if (list) entries = list;
 
-  if (entries.length > 0) {
-    idx = 0;
-    await show(entries[idx]);
+  rebuildRotation();
+  if (rotation.length > 0) {
+    await show(rotation[idx]);
     schedule();
   } else {
     console.warn("[photos] no photos in manifest yet; will keep polling");
@@ -197,4 +293,88 @@ export async function startSlideshow(): Promise<void> {
 async function refreshManifest(): Promise<void> {
   const list = await fetchManifest();
   if (list) applyEntries(list);
+}
+
+function favouriteHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (UPLOADER.TOKEN) headers["X-Upload-Token"] = UPLOADER.TOKEN;
+  return headers;
+}
+
+/** Recompute rotation membership from `entries`, but only actually replace
+ *  (and reshuffle) `rotation` if the set of ids changed — e.g. a favourite
+ *  toggle that doesn't move a photo in or out of the rotation set leaves the
+ *  current shuffled order untouched, so a single heart tap doesn't visibly
+ *  reorder unrelated photos. When membership DOES change, delegates to
+ *  rebuildRotation() (a fresh shuffle is appropriate there — the set itself
+ *  is new). Contrast with rebuildRotation(), which always reshuffles and is
+ *  used where that's the point (a full pass completing, a manifest refresh). */
+function syncRotationMembership(preserveId?: string): void {
+  const next = computeRotation(entries);
+  const currentIds = new Set(rotation.map((e) => e.id));
+  const sameMembership = next.length === rotation.length && next.every((e) => currentIds.has(e.id));
+  if (sameMembership) {
+    if (preserveId) {
+      const found = rotation.findIndex((e) => e.id === preserveId);
+      if (found >= 0) idx = found;
+    }
+    return;
+  }
+  rebuildRotation(preserveId);
+}
+
+// Per-id request counter so an older, slower response can never clobber a
+// newer toggle of the same photo — see toggleFavourite().
+const favouriteRequestGen = new Map<string, number>();
+
+/**
+ * Optimistically flip `favourite` on the entry with this id, POST it to the
+ * frame-uploader add-on, and reconcile with the server's response — reverts
+ * on failure. If the uploader isn't configured (dev/mock, or a box that
+ * hasn't set up the mapped-port fallback — see config.ts's `favouriteUrl()`),
+ * the optimistic update is treated as final, same spirit as the AC controls'
+ * dev-mode no-op in data.ts. Returns the final favourite state so the caller
+ * (overlay.ts's heart button, gallery.ts's grid/lightbox) can update its icon.
+ *
+ * Safe against overlapping calls for the same id (e.g. a fast double-tap): a
+ * generation counter per id means only the response to the MOST RECENT
+ * request may write back, so a slower, older request's response can't undo a
+ * newer toggle. Reconciliation also re-looks-up the entry by id (rather than
+ * closing over the original object) so a manifest refresh that replaced
+ * `entries` mid-flight doesn't leave the result applied to an orphaned copy.
+ */
+export async function toggleFavourite(id: string): Promise<boolean> {
+  const entry = entries.find((e) => e.id === id);
+  if (!entry) return false;
+  const prev = entry.favourite;
+  entry.favourite = !prev;
+
+  const gen = (favouriteRequestGen.get(id) || 0) + 1;
+  favouriteRequestGen.set(id, gen);
+
+  const url = favouriteUrl();
+  if (url) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: favouriteHeaders(),
+        body: JSON.stringify({ id, value: entry.favourite }),
+      });
+      if (!res.ok) throw new Error(`favourite ${res.status}`);
+      const updated = (await res.json()) as Partial<ManifestEntry>;
+      if (favouriteRequestGen.get(id) === gen) {
+        const live = entries.find((e) => e.id === id);
+        if (live) live.favourite = updated.favourite === true;
+      }
+    } catch (err) {
+      console.warn("[photos] favourite toggle failed; reverting", err);
+      if (favouriteRequestGen.get(id) === gen) {
+        const live = entries.find((e) => e.id === id);
+        if (live) live.favourite = prev;
+      }
+    }
+  }
+
+  syncRotationMembership(rotation[idx] ? rotation[idx].id : undefined);
+  return entries.find((e) => e.id === id)?.favourite ?? entry.favourite;
 }

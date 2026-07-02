@@ -19,15 +19,17 @@ frame/dist/runtime-config.json
 !frame/runtime-config.example.json
 
 # ---- Generated runtime data ----
-# The display reads photos/ + manifest.json; these are produced by the
-# processor at runtime and must never be committed. Folder structure is
+# The display reads photos/ + thumbs/ + manifest.json; these are produced by
+# the processor at runtime and must never be committed. Folder structure is
 # kept via .gitkeep, but contents are ignored.
 data/incoming/*
 data/photos/*
+data/thumbs/*
 data/manifest.json
 data/mock-entities.json
 !data/incoming/.gitkeep
 !data/photos/.gitkeep
+!data/thumbs/.gitkeep
 
 # Image/video blobs anywhere
 *.jpg

@@ -2,6 +2,16 @@
 
 All notable changes to the frame-os Uploader add-on.
 
+## 2.1.0 - 2026-07-02
+
+- Gallery + favourites: inline processing now also generates a gallery
+  thumbnail (`thumbs/<id>.jpg`, <=300px long edge, JPEG q80) for every photo
+  and records it in the manifest's new `thumb` field. New `POST /favourite
+  {id, value}` endpoint flips a manifest entry's new `favourite` flag
+  (default `false`), protected the same way as `/upload`. A one-shot backfill
+  (`processor.py --backfill-thumbnails`, also run automatically on add-on
+  startup) generates thumbnails for photos published before this change.
+
 ## 2.0.1 - 2026-07-01
 
 - Fix: the upload page's file input had `capture="environment"`, which forces

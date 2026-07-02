@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en" data-theme="light">
   <head>
-    <script type="module" crossorigin src="/local/frame/assets/polyfills-_2OOkclV.js"></script>
+    <script type="module" crossorigin src="/local/frame/assets/polyfills-D8XIVfss.js"></script>
 
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -10,8 +10,8 @@
     <link rel="apple-touch-icon" href="/local/frame/icons/icon-192.png" />
     <link rel="manifest" href="/local/frame/manifest.webmanifest" />
     <title>frame-os</title>
-    <script type="module" crossorigin src="/local/frame/assets/index-CyCVZKaK.js"></script>
-    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-CUeCX2Fd.css">
+    <script type="module" crossorigin src="/local/frame/assets/index-qd72Maz0.js"></script>
+    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-CSlkFWZd.css">
     <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();if(location.protocol!="file:"){window.__vite_is_modern_browser=true}</script>
     <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
   </head>
@@ -68,6 +68,9 @@
            (see .ov-controls in styles.css / dim()/wake() in overlay.ts). -->
       <div class="ov-controls" id="ov-controls">
         <div class="ov-nav" id="ov-nav">
+          <button type="button" class="nav-btn" id="nav-favourite" aria-label="Add to favourites">
+            <svg id="nav-favourite-icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 21s-7.5-4.686-10-9.033C.686 8.5 2.5 5 6 5c2 0 3.5 1 6 3.5C14.5 6 16 5 18 5c3.5 0 5.314 3.5 4 6.967C19.5 16.314 12 21 12 21z" /></svg>
+          </button>
           <button type="button" class="nav-btn" id="nav-prev" aria-label="Previous photo">
             <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6" /></svg>
           </button>
@@ -78,6 +81,10 @@
             <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" /></svg>
           </button>
         </div>
+
+        <button type="button" class="gear-btn gallery-open-btn" id="gallery-open-btn" aria-label="Open gallery">
+          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></g></svg>
+        </button>
 
         <button type="button" class="gear-btn" id="settings-gear" aria-label="Settings">
           <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3.5 12a8.5 8.5 0 0 1 .16-1.64l-1.86-1.45 1.5-2.6 2.2.62c.5-.5 1.08-.92 1.72-1.24l.3-2.28h3l.3 2.28c.64.32 1.22.74 1.72 1.24l2.2-.62 1.5 2.6-1.86 1.45c.1.53.16 1.08.16 1.64s-.06 1.11-.16 1.64l1.86 1.45-1.5 2.6-2.2-.62c-.5.5-1.08.92-1.72 1.24l-.3 2.28h-3l-.3-2.28a6.9 6.9 0 0 1-1.72-1.24l-2.2.62-1.5-2.6 1.86-1.45c-.1-.53-.16-1.08-.16-1.64z" /></svg>
@@ -118,8 +125,32 @@
 
     <span id="stale-dot" class="stale-dot" title="Showing last-known values"></span>
 
+    <!-- Gallery: full-screen touch-scrollable grid of every photo, using
+         thumbs/ (not full-size) — see gallery.ts / CLAUDE.md hard constraints
+         on the ancient WebView. Pauses the slideshow while open. -->
+    <div class="gallery-overlay" id="gallery-overlay">
+      <div class="gallery-header">
+        <span class="gallery-title">All Photos</span>
+        <button type="button" class="gallery-icon-btn" id="gallery-close-btn" aria-label="Close gallery">
+          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+
+    <!-- Lightbox: one photo at full size, opened by tapping a gallery grid item. -->
+    <div class="lightbox-overlay" id="lightbox-overlay">
+      <img id="lightbox-img" class="lightbox-img" alt="" />
+      <button type="button" class="gallery-icon-btn lightbox-back-btn" id="lightbox-back-btn" aria-label="Back to gallery">
+        <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6" /></svg>
+      </button>
+      <button type="button" class="gallery-icon-btn lightbox-fav-btn" id="lightbox-fav-btn" aria-label="Toggle favourite">
+        <svg id="lightbox-fav-icon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 21s-7.5-4.686-10-9.033C.686 8.5 2.5 5 6 5c2 0 3.5 1 6 3.5C14.5 6 16 5 18 5c3.5 0 5.314 3.5 4 6.967C19.5 16.314 12 21 12 21z" /></svg>
+      </button>
+    </div>
+
     <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
-    <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-c8e_mEc0.js"></script>
-    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-CSEiQEX0.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+    <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-0LH2EoBj.js"></script>
+    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-BToTKSGR.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
   </body>
 </html>

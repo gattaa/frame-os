@@ -19,7 +19,7 @@ function serveData(base: string): Plugin {
   const prefix = base;
   // Only these live under dataRoot; everything else under base is a real
   // built asset (JS bundles, icons, sw.js) and must fall through to Vite.
-  const dataPaths = ["manifest.json", "mock-entities.json", "photos/"];
+  const dataPaths = ["manifest.json", "mock-entities.json", "photos/", "thumbs/"];
   const types: Record<string, string> = {
     ".json": "application/json",
     ".jpg": "image/jpeg",

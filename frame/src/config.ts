@@ -73,12 +73,38 @@ export function getSubscribedEntityIds(): string[] {
   ];
 }
 
-// --- Home Assistant connection -----------------------------------------------
+// --- Remote endpoints (Home Assistant, frame-uploader) -----------------------
 // Placeholders only — real values are loaded at runtime by loadRuntimeConfig().
+// Never baked into the build: dist/ is committed to a public repo, so any
+// build-time-injected value (env vars included) would be publicly visible.
 
-export const HA = {
+/** Shape shared by every remote service the PWA authenticates to at runtime. */
+interface RemoteEndpoint {
+  BASE_URL: string;
+  /** Bearer/shared-secret token. Never in the build — loaded at runtime. */
+  TOKEN: string;
+}
+
+function applyEndpoint(target: RemoteEndpoint, baseUrl: string | undefined, token: string | undefined): void {
+  target.BASE_URL = baseUrl || "";
+  target.TOKEN = token || "";
+}
+
+export const HA: RemoteEndpoint = {
   BASE_URL: "",
-  /** Long-lived access token. Never in the build — loaded at runtime. */
+  TOKEN: "",
+};
+
+/**
+ * The frame-uploader add-on, for `POST /favourite` (heart toggle + gallery).
+ * The kiosk display isn't a logged-in HA session, so it can't resolve/
+ * authenticate an ingress path — reaching the add-on requires its
+ * mapped-port fallback (see haos-addons/frame-uploader/DOCS.md, "Alternative:
+ * mapped port"), hence a base URL + bearer token here rather than a relative
+ * path.
+ */
+export const UPLOADER: RemoteEndpoint = {
+  BASE_URL: "",
   TOKEN: "",
 };
 
@@ -92,6 +118,9 @@ interface RuntimeHaConfig {
     climates: string[];
     weather: string;
   };
+  /** Optional: only needed to enable the gallery's favourite toggle. */
+  uploaderUrl?: string;
+  uploaderToken?: string;
 }
 
 let runtimeConfigLoaded = false;
@@ -110,8 +139,8 @@ export async function loadRuntimeConfig(): Promise<void> {
     const res = await fetch(`${import.meta.env.BASE_URL}runtime-config.json`, { cache: "no-cache" });
     if (!res.ok) throw new Error(`runtime-config.json ${res.status}`);
     const cfg = (await res.json()) as RuntimeHaConfig;
-    HA.BASE_URL = cfg.haUrl || "";
-    HA.TOKEN = cfg.haToken || "";
+    applyEndpoint(HA, cfg.haUrl, cfg.haToken);
+    applyEndpoint(UPLOADER, cfg.uploaderUrl, cfg.uploaderToken);
     if (cfg.entities) {
       ENTITIES.BATTERY_PCT = cfg.entities.battery || ENTITIES.BATTERY_PCT;
       ENTITIES.BATTERY_STATUS = cfg.entities.batteryStatus || ENTITIES.BATTERY_STATUS;
@@ -149,8 +178,21 @@ const BASE_URL = import.meta.env.BASE_URL;
 export const PATHS = {
   MANIFEST: str("VITE_MANIFEST_URL", `${BASE_URL}manifest.json`),
   PHOTOS_BASE: str("VITE_PHOTOS_BASE", `${BASE_URL}photos`),
+  /** Gallery-grid thumbnails (<=300px) — see haos-addons/frame-uploader. */
+  THUMBS_BASE: str("VITE_THUMBS_BASE", `${BASE_URL}thumbs`),
   MOCK_ENTITIES: str("VITE_MOCK_ENTITIES_URL", `${BASE_URL}mock-entities.json`),
 } as const;
+
+/**
+ * `POST /favourite` lives on the UPLOADER host, not the display's own origin
+ * (see UPLOADER above) — computed lazily since UPLOADER.BASE_URL is only
+ * populated once loadRuntimeConfig() resolves. Empty when unconfigured (dev/
+ * mock, or a box that hasn't set up the mapped-port fallback yet); callers
+ * treat that as "favouriting unavailable" rather than erroring.
+ */
+export function favouriteUrl(): string {
+  return UPLOADER.BASE_URL ? `${UPLOADER.BASE_URL}/favourite` : "";
+}
 
 // --- Behaviour tunables -----------------------------------------------------
 

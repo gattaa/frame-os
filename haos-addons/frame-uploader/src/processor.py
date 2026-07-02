@@ -17,13 +17,20 @@ The uploader (the sole writer of ``incoming/``) drops two files per photo:
 
 ``process_one()`` normalizes a single freshly-written image (honor EXIF
 rotation, downscale to <=MAX_LONG_EDGE px on the long edge, re-encode JPEG
-q~JPEG_QUALITY, strip EXIF), writes it to ``photos/<id>.jpg``, and updates
-``manifest.json`` — a list of:
+q~JPEG_QUALITY, strip EXIF), writes it to ``photos/<id>.jpg``, generates a
+small gallery thumbnail (<=MAX_THUMB_EDGE px, JPEG q~THUMB_QUALITY) to
+``thumbs/<id>.jpg``, and updates ``manifest.json`` — a list of:
 
-  {id, file, uploader, caption, channel, ts, w, h}
+  {id, file, uploader, caption, channel, ts, w, h, favourite, thumb}
 
 ``id`` is a content hash of the *source* image, so reruns never duplicate and
-the same photo dropped twice collapses to one entry.
+the same photo dropped twice collapses to one entry. The thumbnail filename
+reuses that same id, so thumbnail generation is idempotent for free — no
+separate hash needed. ``favourite`` defaults to ``false`` for newly published
+photos and is flipped only via ``set_favourite()`` (the ``/favourite`` route
+in app.py). Both fields are additive: older manifests/entries missing them
+are tolerated everywhere they're read, and ``backfill_thumbnails()`` is a
+one-shot pass that fills them in for pre-existing entries.
 
 This file also keeps a one-shot, directory-scanning CLI (``run_once`` /
 ``main``) for manually reprocessing anything stuck in ``incoming/`` (e.g.
@@ -64,6 +71,8 @@ def _env_int(name: str, default: int) -> int:
 
 MAX_LONG_EDGE = _env_int("MAX_LONG_EDGE", 1280)   # downscale so the long edge is at most this many px
 JPEG_QUALITY = _env_int("JPEG_QUALITY", 85)       # re-encode quality
+MAX_THUMB_EDGE = _env_int("MAX_THUMB_EDGE", 300)  # gallery thumbnail long edge, px
+THUMB_QUALITY = _env_int("THUMB_QUALITY", 80)     # gallery thumbnail re-encode quality
 SETTLE_SECONDS = 2.0      # ignore files touched more recently than this (in-flight writers)
 NO_META_GRACE = 120.0     # after this long with no sidecar, process with default meta + warn
 ID_LEN = 16               # hex chars of the content hash kept as the id
@@ -82,13 +91,14 @@ class Config:
     incoming: Path
     photos: Path
     manifest: Path
+    thumbs: Path
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "Config":
         """Resolve paths with precedence: CLI flag > env var > repo-relative default.
 
         ``INCOMING_DIR`` and ``OUTPUT_DIR`` are the two env vars the add-on
-        sets (``OUTPUT_DIR`` is the parent of ``photos/`` and
+        sets (``OUTPUT_DIR`` is the parent of ``photos/``, ``thumbs/``, and
         ``manifest.json``, mirroring this repo's ``data/`` layout) — see
         ../DOCS.md.
         """
@@ -112,6 +122,13 @@ class Config:
         else:
             photos = data_default / "photos"
 
+        if args.thumbs:
+            thumbs = Path(args.thumbs)
+        elif output_env:
+            thumbs = Path(output_env) / "thumbs"
+        else:
+            thumbs = data_default / "thumbs"
+
         if args.manifest:
             manifest = Path(args.manifest)
         elif output_env:
@@ -119,7 +136,7 @@ class Config:
         else:
             manifest = data_default / "manifest.json"
 
-        return cls(incoming.resolve(), photos.resolve(), manifest.resolve())
+        return cls(incoming.resolve(), photos.resolve(), manifest.resolve(), thumbs.resolve())
 
 
 # --- Helpers --------------------------------------------------------------
@@ -223,31 +240,76 @@ def _iso(epoch: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
 
 
+def _flatten_to_rgb(img: Image.Image) -> Image.Image:
+    """Flatten transparency onto white (JPEG has no alpha) and ensure RGB."""
+    if img.mode in ("RGBA", "LA", "P"):
+        img = img.convert("RGBA")
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[-1])
+        return background
+    if img.mode != "RGB":
+        return img.convert("RGB")
+    return img
+
+
+def _decode_normalized(data: bytes) -> Image.Image:
+    """Open raw image bytes, honor EXIF orientation, and flatten to RGB.
+
+    Returns a standalone in-memory copy (safe to use after this function
+    returns and the source file/BytesIO closes) so callers can derive
+    multiple differently-sized outputs from one decode — see
+    process_image_and_thumbnail(), which uses this to avoid decoding the
+    same upload twice (once per output size).
+    """
+    with Image.open(io.BytesIO(data)) as img:
+        img = ImageOps.exif_transpose(img)  # bake in rotation, then we drop EXIF
+        return _flatten_to_rgb(img).copy()
+
+
+def _resize_to_jpeg(img: Image.Image, max_edge: int, quality: int) -> Tuple[bytes, int, int]:
+    """Downscale (never upscale) a normalized image to <=max_edge on its long
+    edge and re-encode as JPEG. Operates on a copy — never mutates `img`, so
+    the same normalized base can be resized to multiple output sizes."""
+    img = img.copy()
+    img.thumbnail((max_edge, max_edge), Image.LANCZOS)
+    w, h = img.size
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=quality, optimize=True)
+    # No exif= passed -> EXIF is not carried into the output.
+    return out.getvalue(), w, h
+
+
 def process_image(data: bytes) -> Tuple[bytes, int, int]:
     """Normalize raw image bytes -> (jpeg_bytes, width, height).
 
     Honors EXIF orientation, downscales to MAX_LONG_EDGE on the long edge
     (never upscales), flattens to RGB, and re-encodes JPEG with EXIF stripped.
     """
-    with Image.open(io.BytesIO(data)) as img:
-        img = ImageOps.exif_transpose(img)  # bake in rotation, then we drop EXIF
+    return _resize_to_jpeg(_decode_normalized(data), MAX_LONG_EDGE, JPEG_QUALITY)
 
-        if img.mode in ("RGBA", "LA", "P"):
-            # Flatten transparency onto white so JPEG (no alpha) looks right.
-            img = img.convert("RGBA")
-            background = Image.new("RGB", img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[-1])
-            img = background
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
 
-        img.thumbnail((MAX_LONG_EDGE, MAX_LONG_EDGE), Image.LANCZOS)  # downsize only
-        w, h = img.size
+def process_thumbnail(data: bytes) -> bytes:
+    """Normalize raw image bytes -> a small gallery-grid thumbnail (JPEG bytes).
 
-        out = io.BytesIO()
-        img.save(out, format="JPEG", quality=JPEG_QUALITY, optimize=True)
-        # No exif= passed -> EXIF is not carried into the output.
-        return out.getvalue(), w, h
+    Same EXIF/flatten handling as process_image(), just a much smaller cap
+    (MAX_THUMB_EDGE) and lower quality — this is what the frame/ gallery grid
+    loads instead of full-size photos, since the display's ancient WebView
+    can't comfortably decode dozens of full-res images at once.
+    """
+    jpeg, _w, _h = _resize_to_jpeg(_decode_normalized(data), MAX_THUMB_EDGE, THUMB_QUALITY)
+    return jpeg
+
+
+def process_image_and_thumbnail(data: bytes) -> Tuple[bytes, int, int, bytes]:
+    """Like calling process_image() and process_thumbnail() on the same raw
+    bytes, but decodes the source only once instead of twice — used by
+    process_one()/run_once(), which always need both outputs from the same
+    upload.
+    """
+    base = _decode_normalized(data)
+    jpeg, w, h = _resize_to_jpeg(base, MAX_LONG_EDGE, JPEG_QUALITY)
+    thumb_jpeg, _tw, _th = _resize_to_jpeg(base, MAX_THUMB_EDGE, THUMB_QUALITY)
+    return jpeg, w, h, thumb_jpeg
 
 
 def atomic_write_bytes(path: Path, data: bytes) -> None:
@@ -295,6 +357,24 @@ def remove_source(image: Path) -> None:
             log.warning("could not remove %s: %s", src.name, exc)
 
 
+def _build_entry(eid: str, out_name: str, thumb_name: str, meta: Dict[str, Any], w: int, h: int) -> Dict[str, Any]:
+    """Assemble a fresh manifest entry — shared by process_one() and
+    run_once() so the entry shape (and its favourite/thumb defaults) is
+    defined in exactly one place."""
+    return {
+        "id": eid,
+        "file": out_name,
+        "uploader": meta["uploader"],
+        "caption": meta["caption"],
+        "channel": meta["channel"],
+        "ts": meta["ts"],
+        "w": w,
+        "h": h,
+        "favourite": False,
+        "thumb": thumb_name,
+    }
+
+
 # --- Inline single-file path (used by app.py on every upload) --------------
 
 def process_one(cfg: Config, image: Path) -> Optional[Dict[str, Any]]:
@@ -308,6 +388,7 @@ def process_one(cfg: Config, image: Path) -> Optional[Dict[str, Any]]:
     decode fully before saving, but is handled defensively).
     """
     cfg.photos.mkdir(parents=True, exist_ok=True)
+    cfg.thumbs.mkdir(parents=True, exist_ok=True)
     cfg.manifest.parent.mkdir(parents=True, exist_ok=True)
 
     manifest = load_manifest(cfg.manifest)
@@ -333,24 +414,17 @@ def process_one(cfg: Config, image: Path) -> Optional[Dict[str, Any]]:
     meta = load_meta_immediate(image)
 
     try:
-        jpeg, w, h = process_image(src)
+        jpeg, w, h, thumb_jpeg = process_image_and_thumbnail(src)
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         log.error("corrupt/undecodable %s (%s); quarantining", image.name, exc)
         quarantine(image)
         return None
 
     out_name = f"{eid}.jpg"
+    thumb_name = f"{eid}.jpg"
     atomic_write_bytes(cfg.photos / out_name, jpeg)
-    entry = {
-        "id": eid,
-        "file": out_name,
-        "uploader": meta["uploader"],
-        "caption": meta["caption"],
-        "channel": meta["channel"],
-        "ts": meta["ts"],
-        "w": w,
-        "h": h,
-    }
+    atomic_write_bytes(cfg.thumbs / thumb_name, thumb_jpeg)
+    entry = _build_entry(eid, out_name, thumb_name, meta, w, h)
     index[eid] = entry
     remove_source(image)
 
@@ -358,6 +432,66 @@ def process_one(cfg: Config, image: Path) -> Optional[Dict[str, Any]]:
     atomic_write_json(cfg.manifest, new_manifest)
     log.info("published %s -> %s (%dx%d, %s)", image.name, out_name, w, h, meta["channel"])
     return entry
+
+
+def set_favourite(cfg: Config, entry_id: str, value: bool) -> Optional[Dict[str, Any]]:
+    """Flip the `favourite` flag on one manifest entry and rewrite the manifest
+    atomically (same temp+rename write as everywhere else in this module).
+
+    Returns the updated entry, or ``None`` if no entry with that id exists —
+    the caller (app.py's ``POST /favourite``) turns that into a 404.
+    """
+    manifest = load_manifest(cfg.manifest)
+    updated: Optional[Dict[str, Any]] = None
+    for entry in manifest:
+        if entry.get("id") == entry_id:
+            entry["favourite"] = bool(value)
+            updated = entry
+            break
+    if updated is None:
+        return None
+    atomic_write_json(cfg.manifest, manifest)
+    log.info("favourite %s -> %s", entry_id, updated["favourite"])
+    return updated
+
+
+def backfill_thumbnails(cfg: Config) -> int:
+    """One-shot backfill for manifest entries published before `thumb`/
+    `favourite` existed: generate a thumbnail from the already-processed
+    `photos/<file>` (no need to re-read `incoming/` or re-run EXIF/downscale
+    normalization — that's already baked into the full-size output) and
+    default `favourite` to False. Safe to run repeatedly (skips entries that
+    already have a `thumb`); also called once at add-on startup so existing
+    photos get thumbnails without a re-upload. Returns the number of entries
+    changed.
+    """
+    cfg.thumbs.mkdir(parents=True, exist_ok=True)
+    manifest = load_manifest(cfg.manifest)
+    changed = 0
+    for entry in manifest:
+        if "favourite" not in entry:
+            entry["favourite"] = False
+            changed += 1
+        if entry.get("thumb"):
+            continue
+        file = entry.get("file")
+        photo_path = cfg.photos / file if file else None
+        if not photo_path or not photo_path.exists():
+            log.warning("backfill: missing photo file for entry %s (%s)", entry.get("id"), file)
+            continue
+        try:
+            thumb_jpeg = process_thumbnail(photo_path.read_bytes())
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            log.error("backfill: could not thumbnail %s: %s", file, exc)
+            continue
+        thumb_name = f"{entry['id']}.jpg"
+        atomic_write_bytes(cfg.thumbs / thumb_name, thumb_jpeg)
+        entry["thumb"] = thumb_name
+        changed += 1
+    if changed:
+        atomic_write_json(cfg.manifest, manifest)
+        log.info("backfill: updated %d manifest entr%s", changed, "y" if changed == 1 else "ies")
+    return changed
 
 
 # --- Directory-scanning path (manual reprocessing CLI only) ---------------
@@ -385,6 +519,7 @@ def run_once(cfg: Config) -> int:
     inline in app.py.
     """
     cfg.photos.mkdir(parents=True, exist_ok=True)
+    cfg.thumbs.mkdir(parents=True, exist_ok=True)
     cfg.manifest.parent.mkdir(parents=True, exist_ok=True)
 
     manifest = load_manifest(cfg.manifest)
@@ -433,24 +568,17 @@ def run_once(cfg: Config) -> int:
             continue  # not ready this cycle
 
         try:
-            jpeg, w, h = process_image(src)
+            jpeg, w, h, thumb_jpeg = process_image_and_thumbnail(src)
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             log.error("corrupt/undecodable %s (%s); quarantining", image.name, exc)
             quarantine(image)
             continue
 
         out_name = f"{eid}.jpg"
+        thumb_name = f"{eid}.jpg"
         atomic_write_bytes(cfg.photos / out_name, jpeg)
-        index[eid] = {
-            "id": eid,
-            "file": out_name,
-            "uploader": meta["uploader"],
-            "caption": meta["caption"],
-            "channel": meta["channel"],
-            "ts": meta["ts"],
-            "w": w,
-            "h": h,
-        }
+        atomic_write_bytes(cfg.thumbs / thumb_name, thumb_jpeg)
+        index[eid] = _build_entry(eid, out_name, thumb_name, meta, w, h)
         remove_source(image)
         published += 1
         log.info("published %s -> %s (%dx%d, %s)",
@@ -475,7 +603,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument("--incoming", help="override incoming/ dir")
     parser.add_argument("--photos", help="override photos/ dir")
+    parser.add_argument("--thumbs", help="override thumbs/ dir")
     parser.add_argument("--manifest", help="override manifest.json path")
+    parser.add_argument(
+        "--backfill-thumbnails", action="store_true",
+        help="generate thumbnails (and default favourite=false) for existing "
+             "manifest entries missing them, then exit — does not touch incoming/",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     args = parser.parse_args(argv)
 
@@ -488,11 +622,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     cfg = Config.from_args(args)
     log.info("incoming=%s", cfg.incoming)
     log.info("photos  =%s", cfg.photos)
+    log.info("thumbs  =%s", cfg.thumbs)
     log.info("manifest=%s", cfg.manifest)
 
     cfg.incoming.mkdir(parents=True, exist_ok=True)
     cfg.photos.mkdir(parents=True, exist_ok=True)
+    cfg.thumbs.mkdir(parents=True, exist_ok=True)
     cfg.manifest.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.backfill_thumbnails:
+        changed = backfill_thumbnails(cfg)
+        log.info("backfill done: %d entr%s updated", changed, "y" if changed == 1 else "ies")
+        return 0
 
     published = run_once(cfg)
     log.info("done: %d new photo%s", published, "" if published == 1 else "s")

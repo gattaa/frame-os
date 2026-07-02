@@ -12,6 +12,7 @@ import { DEV, USE_MOCK } from "./config";
 import { startSlideshow } from "./photos";
 import { startData } from "./data";
 import { startOverlay } from "./overlay";
+import { startGallery } from "./gallery";
 import { startTheme } from "./theme";
 
 function registerServiceWorker(): void {
@@ -31,6 +32,7 @@ async function boot(): Promise<void> {
 
   startTheme();      // follow HA night mode (subscribes to the data layer)
   startOverlay();    // clock ticks and controls are live immediately
+  startGallery();    // wires the gallery/lightbox controls
   startData();       // hydrate from cache, then HA/mock (async, non-blocking)
   startSlideshow();  // manifest + crossfade (async, non-blocking)
 

@@ -34,11 +34,25 @@
   --badge-line-selected: rgba(255, 255, 255, 0.42);
   --flame: #e8a066;
   --ice: #8fc7e8;
+
+  /* Gallery: the one opaque, full-screen UI surface in this app (everything
+     else sits transparent over a photo), so it's where the light-theme-
+     default / dark-night-theme split from CLAUDE.md is actually visible. */
+  --gallery-bg: #f4f5f7;
+  --gallery-fg: #1b1e27;
+  --gallery-sub: rgba(27, 30, 39, 0.55);
+  --gallery-item-bg: #ffffff;
+  --gallery-item-line: rgba(0, 0, 0, 0.08);
 }
 
 :root[data-theme="dark"] {
   --bg: #000000;
   --stale: #f0b323;
+  --gallery-bg: #14161c;
+  --gallery-fg: #f5f6f8;
+  --gallery-sub: rgba(245, 246, 248, 0.55);
+  --gallery-item-bg: #1e2129;
+  --gallery-item-line: rgba(255, 255, 255, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -512,6 +526,12 @@ html, body {
   right: 40px;
 }
 
+/* Gallery button mirrors the settings gear on the opposite corner. */
+.gallery-open-btn {
+  right: auto;
+  left: 40px;
+}
+
 /* Settings panel: anchored above the gear button, same solid-fill-first
  * treatment as .ac-panel (blur is progressive enhancement only). */
 .settings-panel {
@@ -640,4 +660,143 @@ html, body {
 }
 #stale-dot.on {
   opacity: 0.9;
+}
+
+/* --- Gallery: full-screen grid of every photo (thumbs/, not full-size) ------
+ * An opaque takeover screen (not layered over a photo), styled with the
+ * light-theme-default / dark-night-theme colors from :root above — unlike
+ * the rest of the overlay, which stays legible over any photo via a
+ * dark-glass fill regardless of theme (see .ac-panel etc.). Grid scrolling
+ * uses -webkit-overflow-scrolling for momentum on the frame's WebKit-based
+ * WebView; backdrop-filter is not used here at all (not needed — this
+ * surface has its own solid background, not a photo behind it). */
+.gallery-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  background: var(--gallery-bg);
+  color: var(--gallery-fg);
+}
+.gallery-overlay.open {
+  display: flex;
+}
+
+.gallery-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 32px 16px;
+}
+.gallery-title {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.gallery-icon-btn {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--gallery-item-line);
+  background: var(--gallery-item-bg);
+  color: var(--gallery-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.gallery-icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.gallery-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* momentum scroll on the WebKit-based WebView */
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  padding: 8px 32px 32px;
+}
+
+.gallery-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--gallery-item-bg);
+  border: 1px solid var(--gallery-item-line);
+  cursor: pointer;
+}
+.gallery-item-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-item-fav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.gallery-item-fav-icon {
+  width: 17px;
+  height: 17px;
+}
+
+/* --- Lightbox: one photo at full size --------------------------------------
+ * Solid black regardless of theme, same reasoning as the slideshow's
+ * letterbox/pillarbox bars (see .photo.fit-contain): a photo-viewing surface
+ * reads correctly in black without special-casing per-theme. */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+.lightbox-overlay.open {
+  display: flex;
+}
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.lightbox-back-btn,
+.lightbox-fav-btn {
+  position: absolute;
+  top: 28px;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.lightbox-back-btn {
+  left: 32px;
+}
+.lightbox-fav-btn {
+  right: 32px;
 }

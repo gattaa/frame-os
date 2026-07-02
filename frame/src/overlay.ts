@@ -17,11 +17,12 @@ import {
 import type { AcState, FrameState } from "./data";
 import { formatShortDate, pad } from "./format";
 import { restartApp, setBrightness, setScreenOn } from "./brightness";
-import { isPaused, stepPhoto, togglePause } from "./photos";
+import { getCurrentEntry, isPaused, stepPhoto, toggleFavourite, togglePause } from "./photos";
 
 let dimTimer = 0;
 
-function el<T extends HTMLElement>(id: string): T | null {
+// Exported for gallery.ts, which needs the same getElementById-with-cast helper.
+export function el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
 
@@ -171,6 +172,19 @@ const ICON_CHEVRON = `<svg viewBox="0 0 24 24"><path fill="none" stroke="current
 // existing <svg id="nav-playpause-icon"> element in index.html.
 const ICON_PAUSE_PATH = `<path fill="currentColor" d="M7 5h3v14H7zM14 5h3v14h-3z"/>`;
 const ICON_PLAY_PATH = `<path fill="currentColor" d="M8 5l11 7-11 7z"/>`;
+
+// Shared with gallery.ts (its grid badges + lightbox toggle use the same glyph).
+const HEART_PATH = "M12 21s-7.5-4.686-10-9.033C.686 8.5 2.5 5 6 5c2 0 3.5 1 6 3.5"
+  + "C14.5 6 16 5 18 5c3.5 0 5.314 3.5 4 6.967C19.5 16.314 12 21 12 21z";
+
+/** Filled heart = favourite, outline = not — path-only (no <svg> wrapper) so
+ *  it can be swapped via .innerHTML on an existing <svg>, same pattern as
+ *  the play/pause icon above. */
+export function heartIconPath(filled: boolean): string {
+  return filled
+    ? `<path fill="currentColor" d="${HEART_PATH}"/>`
+    : `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="${HEART_PATH}"/>`;
+}
 
 /** Which room's panel is expanded, or null when all badges are collapsed. */
 let selectedAcId: string | null = null;
@@ -387,6 +401,46 @@ function wireNav(): void {
   updatePlayPauseIcon();
 }
 
+// --- Favourite heart (current slideshow photo) ------------------------------
+
+let lastFavKey = ""; // `${id}:${favourite}` — skip redundant DOM writes
+
+function renderFavourite(): void {
+  const btn = el<HTMLButtonElement>("nav-favourite");
+  const icon = el("nav-favourite-icon");
+  if (!btn || !icon) return;
+  const entry = getCurrentEntry();
+  const key = entry ? `${entry.id}:${entry.favourite}` : "";
+  if (key === lastFavKey) return;
+  lastFavKey = key;
+  btn.style.visibility = entry ? "visible" : "hidden";
+  if (!entry) return;
+  icon.innerHTML = heartIconPath(entry.favourite);
+  btn.setAttribute("aria-label", entry.favourite ? "Remove from favourites" : "Add to favourites");
+}
+
+function wireFavourite(): void {
+  el<HTMLButtonElement>("nav-favourite")?.addEventListener("click", () => {
+    const entry = getCurrentEntry();
+    if (!entry) return;
+    // toggleFavourite() mutates the entry optimistically *synchronously*,
+    // before its first await — so rendering right after calling it (not
+    // after it resolves) already shows the optimistic state instantly.
+    // Reconcile once the network round-trip finishes (possibly reverted).
+    const pending = toggleFavourite(entry.id);
+    lastFavKey = "";
+    renderFavourite();
+    void pending.then(() => {
+      lastFavKey = "";
+      renderFavourite();
+    });
+  });
+  // No push notification when the displayed photo changes (see photos.ts),
+  // so poll — cheap: just a string compare unless the photo/state changed.
+  window.setInterval(renderFavourite, 500);
+  renderFavourite();
+}
+
 // --- Settings panel (Fully Kiosk: brightness / screen off / restart) ----
 
 let settingsOpen = false;
@@ -484,6 +538,7 @@ export function startOverlay(): void {
 
   onState(render);
   wireNav();
+  wireFavourite();
   wireSettings();
 
   // Any touch/click/move wakes the overlay to full opacity; it dims itself

@@ -3,18 +3,21 @@
 
 Produces, under data/:
   - photos/<id>.jpg   : 6 labeled 1280x800 placeholder photos
-  - manifest.json     : a valid manifest pointing at them
+  - thumbs/<id>.jpg   : matching <=300px gallery thumbnails
+  - manifest.json     : a valid manifest pointing at them (with favourite/thumb)
   - mock-entities.json : fake Home Assistant values (battery %, battery
                          charge/discharge status, house power draw, 4
                          AC climate entities, and a weather entity)
 
-These outputs are written exactly the way the real processor writes them, so
-the PWA cannot tell mock data from the real thing.
+These outputs are written exactly the way the real processor writes them
+(see haos-addons/frame-uploader/src/processor.py), so the PWA cannot tell
+mock data from the real thing. A couple of entries are marked `favourite` so
+the rotation/gallery favourites logic has something to exercise in dev.
 
 Usage::
 
     python gen_mock.py            # write into the repo's data/ dir
-    python gen_mock.py --photos ... --manifest ... --entities ...
+    python gen_mock.py --photos ... --thumbs ... --manifest ... --entities ...
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ import time
 from pathlib import Path
 from typing import Any, List, Tuple
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 ID_LEN = 16
 
@@ -56,16 +59,20 @@ def atomic_write_json(path: Path, obj: Any) -> None:
 
 
 WIDTH, HEIGHT = 1280, 800
+MAX_THUMB_EDGE = 300
+THUMB_QUALITY = 80
 
-# (label, caption, uploader, channel, background RGB)
+# (label, caption, uploader, channel, background RGB, favourite)
 # "ha" is the only real ingest channel (the HA uploader) — see ../CLAUDE.md.
-MOCKS: List[Tuple[str, str, str, str, Tuple[int, int, int]]] = [
-    ("01", "Sunrise over the hills", "alice", "ha", (242, 201, 168)),
-    ("02", "Beach day with the kids", "bob", "ha", (168, 213, 226)),
-    ("03", "City lights at night", "alice", "ha", (60, 64, 91)),
-    ("04", "Forest hike", "carol", "ha", (170, 200, 160)),
-    ("05", "Birthday dinner", "bob", "ha", (224, 178, 196)),
-    ("06", "First snow", "carol", "ha", (224, 230, 238)),
+# Two entries are marked favourite so dev/mock mode exercises the
+# always-favourited-in-rotation + gallery-heart behaviour.
+MOCKS: List[Tuple[str, str, str, str, Tuple[int, int, int], bool]] = [
+    ("01", "Sunrise over the hills", "alice", "ha", (242, 201, 168), False),
+    ("02", "Beach day with the kids", "bob", "ha", (168, 213, 226), True),
+    ("03", "City lights at night", "alice", "ha", (60, 64, 91), False),
+    ("04", "Forest hike", "carol", "ha", (170, 200, 160), False),
+    ("05", "Birthday dinner", "bob", "ha", (224, 178, 196), True),
+    ("06", "First snow", "carol", "ha", (224, 230, 238), False),
 ]
 
 
@@ -109,6 +116,30 @@ def make_placeholder(label: str, caption: str, bg: Tuple[int, int, int]) -> byte
     out = io.BytesIO()
     img.save(out, format="JPEG", quality=85, optimize=True)
     return out.getvalue()
+
+
+def make_thumbnail(jpeg: bytes) -> bytes:
+    """Downscale an already-rendered photo to a <=MAX_THUMB_EDGE gallery
+    thumbnail, matching the real processor's thumbs/ output (see
+    haos-addons/frame-uploader/src/processor.py's process_thumbnail() —
+    duplicated rather than imported, same reasoning as content_id() above:
+    this dev-only generator has no dependency on the add-on's source living
+    anywhere in particular). Includes the EXIF-transpose + alpha-flatten
+    steps too, even though this script's own synthetic placeholders never
+    carry EXIF or alpha, so the two stay in lockstep if that ever changes."""
+    with Image.open(io.BytesIO(jpeg)) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[-1])
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        img.thumbnail((MAX_THUMB_EDGE, MAX_THUMB_EDGE), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=THUMB_QUALITY, optimize=True)
+        return out.getvalue()
 
 
 BATTERY_STATUSES = ["Charging", "Discharging", "Idle"]
@@ -232,33 +263,40 @@ def mock_entities() -> dict:
 def main(argv: List[str] | None = None) -> int:
     root = Path(__file__).resolve().parent.parent
     data = root / "data"
-    parser = argparse.ArgumentParser(description="generate mock photos + manifest + entities")
+    parser = argparse.ArgumentParser(description="generate mock photos + thumbs + manifest + entities")
     parser.add_argument("--photos", default=str(data / "photos"))
+    parser.add_argument("--thumbs", default=str(data / "thumbs"))
     parser.add_argument("--manifest", default=str(data / "manifest.json"))
     parser.add_argument("--entities", default=str(data / "mock-entities.json"))
     args = parser.parse_args(argv)
 
     photos = Path(args.photos)
     photos.mkdir(parents=True, exist_ok=True)
+    thumbs = Path(args.thumbs)
+    thumbs.mkdir(parents=True, exist_ok=True)
 
     now = time.time()
     manifest = []
-    for i, (label, caption, uploader, channel, bg) in enumerate(MOCKS):
+    for i, (label, caption, uploader, channel, bg, favourite) in enumerate(MOCKS):
         jpeg = make_placeholder(label, caption, bg)
         eid = content_id(jpeg)
         fname = f"{eid}.jpg"
         atomic_write_bytes(photos / fname, jpeg)
+        thumb_name = f"{eid}.jpg"
+        atomic_write_bytes(thumbs / thumb_name, make_thumbnail(jpeg))
         # Stagger timestamps so the slideshow has a stable order.
         ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - (len(MOCKS) - i) * 3600))
         manifest.append({
             "id": eid, "file": fname, "uploader": uploader, "caption": caption,
             "channel": channel, "ts": ts, "w": WIDTH, "h": HEIGHT,
+            "favourite": favourite, "thumb": thumb_name,
         })
 
     atomic_write_json(Path(args.manifest), manifest)
     atomic_write_json(Path(args.entities), mock_entities())
 
     print(f"wrote {len(manifest)} photos -> {photos}")
+    print(f"wrote {len(manifest)} thumbs  -> {thumbs}")
     print(f"wrote manifest         -> {args.manifest}")
     print(f"wrote mock entities    -> {args.entities}")
     return 0

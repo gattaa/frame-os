@@ -4,7 +4,7 @@ set -e
 
 INCOMING_DIR="/share/frame/incoming"
 OUTPUT_DIR="/config/www/frame"
-mkdir -p "${INCOMING_DIR}" "${OUTPUT_DIR}/photos"
+mkdir -p "${INCOMING_DIR}" "${OUTPUT_DIR}/photos" "${OUTPUT_DIR}/thumbs"
 
 UPLOAD_TOKEN="$(bashio::config 'upload_token')"
 if [ -z "${UPLOAD_TOKEN}" ] || [ "${#UPLOAD_TOKEN}" -lt 16 ]; then
@@ -30,7 +30,7 @@ export RESTRICT_TO_SUPERVISOR="true"
 
 bashio::log.info "frame-uploader starting on :${UPLOADER_PORT} (ingress only)"
 bashio::log.info "  incoming = ${INCOMING_DIR}  (share, rw)"
-bashio::log.info "  output   = ${OUTPUT_DIR}  (config, rw; served at /local/frame/)"
+bashio::log.info "  output   = ${OUTPUT_DIR}  (config, rw; served at /local/frame/, thumbs at /local/frame/thumbs/)"
 bashio::log.info "  max_long_edge=${MAX_LONG_EDGE}px jpeg_quality=${JPEG_QUALITY}"
 
 exec python3 -m uvicorn app:app --host "${UPLOADER_HOST}" --port "${UPLOADER_PORT}"

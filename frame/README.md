@@ -8,9 +8,11 @@ subtle resting state when idle, waking to full opacity on touch, so it never
 competes with the photo.
 
 **Role in the architecture contract:** READ-ONLY consumer. It only reads
-`../data/photos/` and `../data/manifest.json`, and Home Assistant for live
-tiles. It never writes those files and never talks to ingest channels. See
-[`../CLAUDE.md`](../CLAUDE.md).
+`../data/photos/`, `../data/thumbs/`, and `../data/manifest.json`, and Home
+Assistant for live tiles. It never writes those files and never talks to
+ingest channels directly — the one exception is `POST /favourite` on the
+frame-uploader add-on, a narrow write to a single manifest flag, not a
+generic file write. See [`../CLAUDE.md`](../CLAUDE.md).
 
 ## Running
 
@@ -52,12 +54,13 @@ support, so it loads the **nomodule legacy bundle**.
 
 | File | Responsibility |
 |------|----------------|
-| `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `BATTERY_STATUS`, `HOUSE_POWER`, `CLIMATES` — one or more `climate.*` entities), HA base URL + token (loaded at runtime, see below), Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths, behaviour tunables. |
-| `src/photos.ts` | Reads `manifest.json`, preloads, crossfades every ~12s. Images are fully static — `object-fit:cover` by default, or `contain` with pure-white letterbox/pillarbox bars when a photo's aspect ratio deviates significantly from the 1280x800 screen. Ordered by `ts`, with a sender chip + caption. Exposes pause/resume/step for the nav controls. |
+| `src/config.ts` | All env-specific config: entity IDs (`BATTERY_PCT`, `BATTERY_STATUS`, `HOUSE_POWER`, `CLIMATES` — one or more `climate.*` entities), HA base URL + token and the frame-uploader `UPLOADER` base URL + token (loaded at runtime, see below), Fully Kiosk base, the `USE_MOCK`/`DEV` switch, data paths (including `THUMBS_BASE`), behaviour tunables. |
+| `src/photos.ts` | Reads `manifest.json`, preloads, crossfades every ~12s. Images are fully static — `object-fit:cover` by default, or `contain` with pure-white letterbox/pillarbox bars when a photo's aspect ratio deviates significantly from the 1280x800 screen. The always-on rotation is every `favourite` photo plus the 10 newest non-favourites, shuffled together and reshuffled each full pass. Exposes pause/resume/step for the nav controls, `getAllEntries()`/`getCurrentEntry()` for the gallery, and `toggleFavourite()` (optimistic `POST /favourite`, reconciled on response). |
 | `src/data.ts` | Subscribes to HA entities via `home-assistant-js-websocket`; mirrors every update to IndexedDB; falls back to last-known on disconnect / offline / mock and flags it **stale**. Never crashes on missing entities. |
 | `src/idb.ts` | Tiny promise-based IndexedDB key/value store (hand-written, no dep). |
 | `src/format.ts` | Shared `D Mon` date formatting, used by both the clock and photo captions. |
-| `src/overlay.ts` | Transparent control-center overlay: clock/date/weather/battery/power top-right, one tappable badge per AC room top-left (tap to expand a setpoint/mode/fan panel, calls HA climate services), prev/pause-play/next photo controls + a settings gear (brightness/screen-off/restart via Fully Kiosk REST) bottom center/right. The nav+gear layer fully fades out on idle and reappears on touch; wakes to full opacity on touch, dims again after inactivity. |
+| `src/overlay.ts` | Transparent control-center overlay: clock/date/weather/battery/power top-right, one tappable badge per AC room top-left (tap to expand a setpoint/mode/fan panel, calls HA climate services), prev/pause-play/next/favourite-heart photo controls + a gallery button + a settings gear (brightness/screen-off/restart via Fully Kiosk REST) bottom center/right. The nav+gear layer fully fades out on idle and reappears on touch; wakes to full opacity on touch, dims again after inactivity. |
+| `src/gallery.ts` | Full-screen, touch-scrollable grid of every photo (loads `thumb`s, not full-size, for WebView performance). Tap a grid item's heart to toggle favourite; tap the photo to open it large with its own favourite toggle + close/back control. Pauses the slideshow's auto-advance while open, resumes on close. |
 | `src/theme.ts` | `startTheme()` — light/dark driven by HA `input_boolean.frame_night_mode` (via the data layer). Optionally nudges PWA brightness on transitions. |
 | `src/brightness.ts` | `setBrightness(0–255)` / `setScreenOn(bool)` / `restartApp()` → Fully Kiosk REST. Gated by config so it no-ops in desktop dev. |
 | `src/main.ts` | Boot + service-worker registration. |
@@ -83,19 +86,24 @@ end-to-end against the real Chromium build).
 Copy `.env.example` → `.env` for a real-device build (Fully Kiosk host, data
 paths, night-mode entity ID). None of it is needed for mock-mode development.
 
-### Home Assistant connection (HA_URL, HA_TOKEN, entity IDs)
+### Home Assistant connection (HA_URL, HA_TOKEN, entity IDs) + uploader
 
-These 5 values are **not** env vars and are never baked into the build:
+These values are **not** env vars and are never baked into the build:
 `dist/` is committed to a public repo, so anything build-time-injected there
-(env vars included) would be publicly visible — and the HA token must never
-be.
+(env vars included) would be publicly visible — and the HA token / uploader
+token must never be.
 
 Instead, `config.ts` fetches `<base>runtime-config.json` once at boot (see
 `loadRuntimeConfig()` in `src/config.ts`) and uses that instead. This file:
 
 - is **created directly on the HA box**, at `config/www/frame/runtime-config.json`
   (i.e. next to the deployed `dist/`) — **not** in this repo, and never committed.
-- follows the shape in [`runtime-config.example.json`](runtime-config.example.json).
+- follows the shape in [`runtime-config.example.json`](runtime-config.example.json),
+  including the optional `uploaderUrl` + `uploaderToken` (the frame-uploader
+  add-on's mapped-port URL and its `upload_token`) that enable the gallery's
+  favourite toggle — see [`../haos-addons/frame-uploader/DOCS.md`](../haos-addons/frame-uploader/DOCS.md),
+  "Alternative: mapped port". Without these two, the heart toggle still
+  updates optimistically in the UI but never persists (logged as a warning).
 - if missing (e.g. 404, or you never created it), the app falls back to mock
   mode automatically rather than attempting a live connection with no
   credentials.

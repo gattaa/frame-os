@@ -11,7 +11,10 @@ python gen_mock.py
 Produces under `../data/`:
 
 - `photos/<id>.jpg` — **6 labeled 1280×800** placeholder photos
-- `manifest.json` — a valid manifest pointing at them
+- `thumbs/<id>.jpg` — matching **<=300px** gallery thumbnails
+- `manifest.json` — a valid manifest pointing at them, including `favourite`
+  (two of the six are marked `true`, to exercise the favourites/gallery logic
+  in dev) and `thumb`
 - `mock-entities.json` — fake Home Assistant values: **battery %**, **battery
   charge/discharge status**, **house power draw**, an **AC climate
   entity**, and a **weather entity** (shaped like real HA state objects, so

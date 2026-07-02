@@ -59,6 +59,7 @@ file, or you're bulk-importing from elsewhere directly into `incoming/`):
 python3 /app/processor.py            # process whatever is waiting, then exit
 python3 /app/processor.py --incoming /share/frame/incoming \
                            --photos /config/www/frame/photos \
+                           --thumbs /config/www/frame/thumbs \
                            --manifest /config/www/frame/manifest.json
 ```
 
@@ -66,6 +67,16 @@ It is **not** a running service — just an occasional manual command (e.g. via
 the add-on's **Terminal** / SSH access, or `docker exec`). It uses the same
 settle-wait / grace-period logic the old poller used, since directory-scanned
 files might still be mid-write.
+
+### Thumbnail backfill (for photos published before `thumb` existed)
+
+`python3 /app/processor.py --backfill-thumbnails` generates a thumbnail (and
+defaults `favourite` to `false`) for every manifest entry missing one, reading
+straight from the already-processed `photos/<file>` — no need to touch
+`incoming/`. It's idempotent (skips entries that already have a `thumb`) and
+runs automatically once on every add-on startup (see `app.py`'s
+`_backfill_thumbnails_on_boot`), so existing photos get thumbnails without a
+re-upload; the CLI flag exists for running it manually/verbosely if needed.
 
 ## API
 
@@ -82,6 +93,13 @@ files might still be mid-write.
   `200 {"id": "<content-hash>", "channel": "ha", "status": "ok", "w": ..,
   "h": ..}` once the photo is live in `manifest.json`, or a 4xx/5xx on
   failure. See "Security model" below for when `X-Upload-Token` is required.
+- `POST /favourite` — JSON body `{"id": "<content-hash>", "value": true|false}`.
+  Flips that manifest entry's `favourite` flag and rewrites `manifest.json`
+  atomically. Same auth as `/upload` (ingress-verified requests skip
+  `X-Upload-Token`; the mapped-port fallback requires it). Returns
+  `200 <updated entry>` or `404` if no entry has that id. This is what the
+  frame/ PWA's heart-toggle and gallery grid call — see frame/README.md for
+  why that requires the mapped-port fallback rather than ingress.
 - `GET /health` — liveness probe.
 
 No HA auth/user API is involved in attribution — the name typed into the page
@@ -101,15 +119,15 @@ now the sole writer):
 1. an image — `sunset.jpg`
 2. a sidecar — **`<image>.meta.json`** — `sunset.jpg.meta.json`
 
-Inline processing turns each pair into a normalized photo + manifest entry
-immediately after it's written.
+Inline processing turns each pair into a normalized photo + thumbnail +
+manifest entry immediately after it's written.
 
 ```
-incoming/                         inline processing         photos/ + manifest.json
+incoming/                         inline processing         photos/ + thumbs/ + manifest.json
   sunset.jpg            ─┐      honor EXIF rotation        photos/<id>.jpg
-  sunset.jpg.meta.json  ─┴──▶   downscale <=1280 long ──▶  manifest.json entry
-                                 re-encode JPEG q85         (display reads these)
-                                 strip EXIF
+  sunset.jpg.meta.json  ─┴──▶   downscale <=1280 long ──▶  thumbs/<id>.jpg (<=300px, gallery grid)
+                                 re-encode JPEG q85         manifest.json entry
+                                 strip EXIF                 (display reads these)
 ```
 
 ### meta.json schema
@@ -143,22 +161,32 @@ upload route always writes a complete sidecar before the image is revealed).
 
 `manifest.json` is a JSON array, sorted oldest-first by `ts`:
 
-| field      | type   | meaning                                              |
-|------------|--------|-------------------------------------------------------|
-| `id`       | string | content hash of the **source** image (stable id)     |
-| `file`     | string | output filename in `photos/` (always `<id>.jpg`)     |
-| `uploader` | string | from the sidecar                                     |
-| `caption`  | string | from the sidecar                                     |
-| `channel`  | string | from the sidecar                                     |
-| `ts`       | string | from the sidecar                                     |
-| `w`        | int    | processed width in px                                |
-| `h`        | int    | processed height in px                               |
+| field       | type   | meaning                                                          |
+|-------------|--------|-------------------------------------------------------------------|
+| `id`        | string | content hash of the **source** image (stable id)                 |
+| `file`      | string | output filename in `photos/` (always `<id>.jpg`)                 |
+| `uploader`  | string | from the sidecar                                                  |
+| `caption`   | string | from the sidecar                                                  |
+| `channel`   | string | from the sidecar                                                  |
+| `ts`        | string | from the sidecar                                                  |
+| `w`         | int    | processed width in px                                             |
+| `h`         | int    | processed height in px                                            |
+| `favourite` | bool   | set via `POST /favourite`; defaults to `false` for new entries    |
+| `thumb`     | string | output filename in `thumbs/` (always `<id>.jpg`, <=300px long edge, JPEG q80) — what the frame/ PWA's gallery grid loads instead of the full-size photo |
+
+Both `favourite` and `thumb` are additive fields: readers must tolerate
+entries missing either (treat a missing `favourite` as `false`, a missing
+`thumb` as "no thumbnail yet"). Every entry produced by inline processing
+always has both; only entries published before this feature existed can lack
+them, and `backfill_thumbnails()` (see below) fixes those up.
 
 ## Guarantees
 
 - **Idempotent.** Re-running never duplicates: the `id` is a content hash, so a
   photo already published (output file present) is skipped. Dropping the same
-  image twice (even under a different name) collapses to **one** entry.
+  image twice (even under a different name) collapses to **one** entry. The
+  thumbnail reuses that same content-hash id as its filename (`thumbs/<id>.jpg`),
+  so it's idempotent for free — no separate hash needed.
 - **Self-healing manifest.** Entries whose backing file no longer exists in
   `photos/` are pruned by the manual-reprocessing CLI (the inline upload path
   doesn't prune on every request, to keep uploads fast — run the CLI if you
@@ -232,12 +260,14 @@ value — no rebuild needed (options aren't baked into the image).
 | Container path | HA volume | Mode | Purpose |
 |---|---|---|---|
 | `/share/frame/incoming` | `share` | rw | Writes uploads; deletes/quarantines them after inline processing. |
-| `/config/www/frame` | `homeassistant_config`, `path: /config` | rw | Writes `photos/` + `manifest.json`. |
+| `/config/www/frame` | `homeassistant_config`, `path: /config` | rw | Writes `photos/` + `thumbs/` + `manifest.json`. |
 
 Both directories are created automatically on startup if missing. Because
 `/config/www/` is Home Assistant's own `www` folder, the output is
-automatically served at **`/local/frame/`** — point the `frame/` display PWA's
-`VITE_MANIFEST_URL` / `VITE_PHOTOS_BASE` at your HA URL + that path.
+automatically served at **`/local/frame/`** (thumbnails at
+**`/local/frame/thumbs/`**) — point the `frame/` display PWA's
+`VITE_MANIFEST_URL` / `VITE_PHOTOS_BASE` / `VITE_THUMBS_BASE` at your HA URL +
+that path.
 
 ## Install / reload as a local add-on
 
@@ -270,7 +300,11 @@ To pin it as a sidebar panel instead:
 ## Alternative: mapped port (skip ingress)
 
 If ingress gives you trouble, or you'd rather manage exposure yourself behind
-your own reverse proxy:
+your own reverse proxy — **or you want the frame/ display's gallery to call
+`POST /favourite`** (the kiosk display isn't a logged-in HA session, so it
+can't resolve or authenticate against an ingress path; the mapped port +
+`X-Upload-Token` is the only reachable option for that caller — see
+frame/README.md):
 
 1. Edit `config.yaml`: delete the `ingress:` / `ingress_port:` /
    `panel_icon:` / `panel_title:` lines, and add:

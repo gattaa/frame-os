@@ -4,10 +4,12 @@ The single HAOS add-on for ingest: it serves its own small upload page
 (GET /) and accepts image uploads (POST /upload) — typically opened as a Home
 Assistant Ingress sidebar panel. On each upload it saves the raw file plus a
 matching `<image>.meta.json` sidecar into `incoming/`, then immediately
-processes that one file inline (resize/EXIF/manifest — see `processor.py`)
-before responding. It is the only writer of both `incoming/` and
-`photos/`/`manifest.json`. See ../CLAUDE.md for the architecture contract and
-DOCS.md for why processing is inline rather than a separate polling service.
+processes that one file inline (resize/EXIF/thumbnail/manifest — see
+`processor.py`) before responding. It is the only writer of `incoming/`,
+`photos/`, `thumbs/`, and `manifest.json`. `POST /favourite` flips a manifest
+entry's `favourite` flag for the frame/ PWA's gallery. See ../CLAUDE.md for
+the architecture contract and DOCS.md for why processing is inline rather
+than a separate polling service.
 
 Contract for the drop:
     incoming/<id>.<ext>             the raw image (validated, original bytes)
@@ -16,6 +18,7 @@ Contract for the drop:
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import os
@@ -27,9 +30,11 @@ from pathlib import Path
 from typing import Deque, Dict, Optional
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
+from pydantic import BaseModel
 
 import processor as proc
 
@@ -41,6 +46,7 @@ PROC_CFG = proc.Config(
     incoming=INCOMING_DIR,
     photos=OUTPUT_DIR / "photos",
     manifest=OUTPUT_DIR / "manifest.json",
+    thumbs=OUTPUT_DIR / "thumbs",
 )
 MAX_UPLOAD_MB = float(os.getenv("MAX_UPLOAD_MB", "25"))
 MAX_UPLOAD_BYTES = int(MAX_UPLOAD_MB * 1024 * 1024)
@@ -107,6 +113,12 @@ async def _restrict_to_supervisor(request: Request, call_next):
 # Rolling per-client rate limit: a deque of recent request timestamps per key.
 _rate_state: Dict[str, Deque[float]] = defaultdict(deque)
 
+# Strong references to fire-and-forget background tasks (see
+# _backfill_thumbnails_on_boot): asyncio only holds a weak reference to a
+# task, so without this the event loop is free to garbage-collect it
+# mid-run.
+_background_tasks: set = set()
+
 
 def _client_key(request: Request) -> str:
     # Behind ingress/a reverse proxy the socket peer is the proxy itself;
@@ -132,7 +144,28 @@ def _rate_limited(key: str) -> bool:
 def _ensure_dirs() -> None:
     INCOMING_DIR.mkdir(parents=True, exist_ok=True)
     PROC_CFG.photos.mkdir(parents=True, exist_ok=True)
+    PROC_CFG.thumbs.mkdir(parents=True, exist_ok=True)
     PROC_CFG.manifest.parent.mkdir(parents=True, exist_ok=True)
+
+
+@app.on_event("startup")
+async def _backfill_thumbnails_on_boot() -> None:
+    """One-shot catch-up for manifest entries published before `thumb`/
+    `favourite` existed (see DOCS.md). Scheduled as a fire-and-forget
+    background task (run in a worker thread, since proc.backfill_thumbnails
+    is blocking file/image I/O) so a large backlog doesn't delay the add-on
+    becoming ready to accept uploads; cheap no-op once every entry already
+    has a thumbnail. Never blocks startup and never crashes it on failure."""
+    async def _run() -> None:
+        try:
+            changed = await run_in_threadpool(proc.backfill_thumbnails, PROC_CFG)
+            print(f"[frame-uploader] thumbnail backfill: {changed} entr{'y' if changed == 1 else 'ies'} updated")
+        except Exception as exc:  # defensive: a backfill failure must not stop the add-on
+            print(f"[frame-uploader] thumbnail backfill failed (non-fatal): {exc}")
+
+    task = asyncio.create_task(_run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -454,6 +487,32 @@ async def upload(
             "h": entry["h"],
         },
     )
+
+
+class FavouriteBody(BaseModel):
+    id: str
+    value: bool
+
+
+@app.post("/favourite")
+async def set_favourite(
+    request: Request,
+    body: FavouriteBody,
+    x_upload_token: Optional[str] = Header(default=None),
+) -> JSONResponse:
+    # Same auth as /upload: ingress-verified requests are already
+    # authenticated by the Supervisor; X-Upload-Token only matters for the
+    # non-ingress / mapped-port fallback (see DOCS.md "Security model"). The
+    # frame/ PWA's gallery/heart-toggle calls this endpoint directly (not
+    # through the upload page), so it's the mapped-port fallback that makes
+    # this reachable from the kiosk display — see frame/README.md.
+    if UPLOAD_TOKEN and not request.state.ingress_verified and x_upload_token != UPLOAD_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid or missing upload token")
+
+    entry = proc.set_favourite(PROC_CFG, body.id, body.value)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"no manifest entry with id {body.id!r}")
+    return JSONResponse(status_code=200, content=entry)
 
 
 if __name__ == "__main__":

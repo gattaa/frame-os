@@ -4,11 +4,12 @@ description: >-
   FastAPI ingest + processing sidecar for frame-os. Serves its own upload page
   (opened as an HA Ingress sidebar panel), saves uploads (with the {uploader,
   caption, channel:"ha", ts} sidecar) into share/frame/incoming, and processes
-  each one inline (EXIF rotation, downscale, re-encode, strip EXIF) into
-  config/www/frame so the frame-os display PWA can read it at /local/frame/.
-  The only add-on in this project's ingest+process pipeline. Reachable via
-  Home Assistant Ingress by default — no port is opened on the host.
-version: "2.0.1"
+  each one inline (EXIF rotation, downscale, re-encode, strip EXIF, thumbnail)
+  into config/www/frame so the frame-os display PWA can read it at
+  /local/frame/. Also serves POST /favourite for the PWA's gallery. The only
+  add-on in this project's ingest+process pipeline. Reachable via Home
+  Assistant Ingress by default — no port is opened on the host.
+version: "2.1.0"
 arch:
   - amd64
   - aarch64
