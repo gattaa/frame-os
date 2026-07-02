@@ -526,12 +526,6 @@ html, body {
   right: 40px;
 }
 
-/* Gallery button mirrors the settings gear on the opposite corner. */
-.gallery-open-btn {
-  right: auto;
-  left: 40px;
-}
-
 /* Settings panel: anchored above the gear button, same solid-fill-first
  * treatment as .ac-panel (blur is progressive enhancement only). */
 .settings-panel {
@@ -716,15 +710,30 @@ html, body {
   height: 22px;
 }
 
+/* Vertical scroll container of month sections (newest first) — the actual
+ * photo grid per month lives in .gallery-month-grid below. */
 .gallery-grid {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch; /* momentum scroll on the WebKit-based WebView */
+  padding: 8px 32px 32px;
+}
+
+.gallery-month-section + .gallery-month-section {
+  margin-top: 28px;
+}
+.gallery-month-heading {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--gallery-sub);
+}
+.gallery-month-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 14px;
-  padding: 8px 32px 32px;
 }
 
 .gallery-item {
@@ -786,6 +795,42 @@ html, body {
   max-height: 100%;
   object-fit: contain;
 }
+
+/* Sender chip + caption — same pairing/behavior as the slideshow's
+ * #photo-meta (see photos.ts's show() / gallery.ts's renderLightboxMeta()). */
+.lightbox-meta {
+  position: absolute;
+  left: 32px;
+  bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: min(640px, calc(100% - 64px));
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.lightbox-caption {
+  font-size: 26px;
+  font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lightbox-caption:empty {
+  display: none;
+}
+.lightbox-chip {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}
+.lightbox-chip:empty {
+  display: none;
+}
+
 .lightbox-back-btn,
 .lightbox-fav-btn {
   position: absolute;

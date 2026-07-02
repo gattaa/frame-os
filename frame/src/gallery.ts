@@ -4,12 +4,14 @@
  *
  * The grid renders `thumb` images, never full-size photos — the point of
  * generating thumbnails at all is so this old WebView isn't asked to decode
- * dozens of full-res JPEGs at once (see CLAUDE.md hard constraints). Tapping
- * a grid item's heart toggles its favourite; tapping the photo itself opens
- * it large (the "lightbox") with its own favourite toggle and a back
- * control. The main slideshow's auto-advance is paused for as long as the
- * gallery (grid or lightbox) is open, and resumes when the gallery is
- * closed entirely.
+ * dozens of full-res JPEGs at once (see CLAUDE.md hard constraints). Photos
+ * are grouped into month sections (newest first) so a large library doesn't
+ * read as one undifferentiated wall of thumbnails. Tapping a grid item's
+ * heart toggles its favourite; tapping the photo itself opens it large (the
+ * "lightbox") with the same sender/caption info as the main slideshow, plus
+ * its own favourite toggle and a back control. The main slideshow's
+ * auto-advance is paused for as long as the gallery (grid or lightbox) is
+ * open, and resumes when the gallery is closed entirely.
  */
 
 import { el, heartIconPath } from "./overlay";
@@ -17,6 +19,7 @@ import {
   getAllEntries, pauseForGallery, photoUrl, resumeFromGallery, thumbUrl, toggleFavourite,
 } from "./photos";
 import type { ManifestEntry } from "./photos";
+import { formatShortDate } from "./format";
 
 let isOpen = false;
 let lightboxId: string | null = null;
@@ -44,6 +47,24 @@ function handleToggle(id: string): void {
   const pending = toggleFavourite(id);
   applyFavouriteState(id);
   void pending.then(() => applyFavouriteState(id));
+}
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+
+/** Sortable "YYYY-MM" grouping key; malformed timestamps all land in one
+ *  "unknown" bucket rather than crashing or scattering across sections. */
+function monthKey(ts: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "unknown";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** "July 2026" section heading for a given entry's timestamp. */
+function monthLabel(ts: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "Undated";
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function buildGridItem(entry: ManifestEntry): HTMLElement {
@@ -80,6 +101,25 @@ function buildGridItem(entry: ManifestEntry): HTMLElement {
   return item;
 }
 
+function buildMonthSection(label: string, items: ManifestEntry[]): HTMLElement {
+  const section = document.createElement("div");
+  section.className = "gallery-month-section";
+
+  const heading = document.createElement("h2");
+  heading.className = "gallery-month-heading";
+  heading.textContent = label;
+  section.appendChild(heading);
+
+  const monthGrid = document.createElement("div");
+  monthGrid.className = "gallery-month-grid";
+  for (const entry of items) {
+    monthGrid.appendChild(buildGridItem(entry));
+  }
+  section.appendChild(monthGrid);
+
+  return section;
+}
+
 let lastGridKey = "";
 
 function renderGrid(): void {
@@ -90,22 +130,33 @@ function renderGrid(): void {
   // chronological/shuffled orders.
   const list = getAllEntries().sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
 
-  const key = list.map((e) => e.id).join(",");
-  if (key === lastGridKey) {
+  const cacheKey = list.map((e) => e.id).join(",");
+  if (cacheKey === lastGridKey) {
     // Same photo set as last time the gallery was opened — resync favourite
     // state (it may have changed via the slideshow's heart button while the
     // gallery was closed) without tearing down and re-decoding every thumb.
     for (const entry of list) applyFavouriteState(entry.id);
     return;
   }
-  lastGridKey = key;
+  lastGridKey = cacheKey;
 
   grid.innerHTML = "";
   gridIcons.clear();
   gridButtons.clear();
+
+  // Group into month sections, in the same newest-first order as `list`.
+  let sectionKey = "";
+  let sectionItems: ManifestEntry[] = [];
   for (const entry of list) {
-    grid.appendChild(buildGridItem(entry));
+    const mKey = monthKey(entry.ts);
+    if (mKey !== sectionKey) {
+      if (sectionItems.length > 0) grid.appendChild(buildMonthSection(monthLabel(sectionItems[0].ts), sectionItems));
+      sectionKey = mKey;
+      sectionItems = [];
+    }
+    sectionItems.push(entry);
   }
+  if (sectionItems.length > 0) grid.appendChild(buildMonthSection(monthLabel(sectionItems[0].ts), sectionItems));
 }
 
 // --- Lightbox (one photo, full size) ----------------------------------------
@@ -117,6 +168,19 @@ function renderLightboxFavourite(favourite: boolean): void {
   if (btn) btn.setAttribute("aria-label", favourite ? "Remove from favourites" : "Add to favourites");
 }
 
+/** Sender chip + caption, same "uploader · D Mon" / message pairing as the
+ *  main slideshow's #photo-meta (see photos.ts's show()). */
+function renderLightboxMeta(entry: ManifestEntry): void {
+  const meta = el("lightbox-meta");
+  const chip = el("lightbox-chip");
+  const cap = el("lightbox-caption");
+  const ts = new Date(entry.ts);
+  const dateStr = Number.isNaN(ts.getTime()) ? "" : formatShortDate(ts);
+  if (chip) chip.textContent = [entry.uploader, dateStr].filter(Boolean).join(" · ");
+  if (cap) cap.textContent = entry.caption || "";
+  if (meta) meta.style.display = entry.uploader || entry.caption ? "flex" : "none";
+}
+
 function openLightbox(id: string): void {
   const entry = getAllEntries().find((e) => e.id === id);
   if (!entry) return;
@@ -124,6 +188,7 @@ function openLightbox(id: string): void {
   const img = el<HTMLImageElement>("lightbox-img");
   if (img) img.src = photoUrl(entry.file);
   renderLightboxFavourite(entry.favourite);
+  renderLightboxMeta(entry);
   el("lightbox-overlay")?.classList.add("open");
 }
 

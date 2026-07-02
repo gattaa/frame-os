@@ -74,11 +74,10 @@
           <button type="button" class="nav-btn" id="nav-next" aria-label="Next photo">
             <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" /></svg>
           </button>
+          <button type="button" class="nav-btn" id="gallery-open-btn" aria-label="Open gallery">
+            <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></g></svg>
+          </button>
         </div>
-
-        <button type="button" class="gear-btn gallery-open-btn" id="gallery-open-btn" aria-label="Open gallery">
-          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></g></svg>
-        </button>
 
         <button type="button" class="gear-btn" id="settings-gear" aria-label="Settings">
           <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3.5 12a8.5 8.5 0 0 1 .16-1.64l-1.86-1.45 1.5-2.6 2.2.62c.5-.5 1.08-.92 1.72-1.24l.3-2.28h3l.3 2.28c.64.32 1.22.74 1.72 1.24l2.2-.62 1.5 2.6-1.86 1.45c.1.53.16 1.08.16 1.64s-.06 1.11-.16 1.64l1.86 1.45-1.5 2.6-2.2-.62c-.5.5-1.08.92-1.72 1.24l-.3 2.28h-3l-.3-2.28a6.9 6.9 0 0 1-1.72-1.24l-2.2.62-1.5-2.6 1.86-1.45c-.1-.53-.16-1.08-.16-1.64z" /></svg>
@@ -135,6 +134,10 @@
     <!-- Lightbox: one photo at full size, opened by tapping a gallery grid item. -->
     <div class="lightbox-overlay" id="lightbox-overlay">
       <img id="lightbox-img" class="lightbox-img" alt="" />
+      <div id="lightbox-meta" class="lightbox-meta">
+        <span id="lightbox-chip" class="lightbox-chip"></span>
+        <span id="lightbox-caption" class="lightbox-caption"></span>
+      </div>
       <button type="button" class="gallery-icon-btn lightbox-back-btn" id="lightbox-back-btn" aria-label="Back to gallery">
         <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6" /></svg>
       </button>
