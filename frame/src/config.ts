@@ -154,13 +154,25 @@ export async function loadRuntimeConfig(): Promise<void> {
   }
 }
 
-// --- Fully Kiosk REST (brightness / screen control) ------------------------
+// --- Kiosk panel backend (brightness / screen wake / force refresh) --------
+// See brightness.ts. Which local kiosk app's REST API to drive; "none"
+// (default, e.g. desktop dev) no-ops everywhere.
 
-export const FULLY_KIOSK = {
-  /** Set false in desktop dev so brightness.ts no-ops. */
-  ENABLED: bool("VITE_FULLY_ENABLED", false),
-  BASE: str("VITE_FULLY_KIOSK_BASE", "http://127.0.0.1:2323"),
-  PASSWORD: str("VITE_FULLY_PASSWORD", ""),
+export type PanelBackendKind = "wallpanel" | "fully" | "none";
+
+function panelBackend(): PanelBackendKind {
+  const v = str("VITE_PANEL_BACKEND", "none");
+  return v === "wallpanel" || v === "fully" ? v : "none";
+}
+
+export const PANEL = {
+  BACKEND: panelBackend(),
+  /** WallPanel's local REST API (POST JSON to `${BASE}/api/command`).
+   *  Same-device localhost only — no ingress/auth token needed. */
+  WALLPANEL_BASE: str("VITE_WALLPANEL_BASE", "http://127.0.0.1:2971"),
+  /** Legacy Fully Kiosk REST API, kept for devices not yet migrated to WallPanel. */
+  FULLY_BASE: str("VITE_FULLY_KIOSK_BASE", "http://127.0.0.1:2323"),
+  FULLY_PASSWORD: str("VITE_FULLY_PASSWORD", ""),
 } as const;
 
 // --- Data paths (served at <base>* directly; see vite.config.ts) -----------
@@ -216,11 +228,11 @@ export const OVERLAY = {
 } as const;
 
 /**
- * Brightness levels (0–255) for the optional PWA-driven Fully Kiosk path
- * (`brightness.ts`, gated by `FULLY_KIOSK.ENABLED`). Day/night is now decided
- * by HA's `frame_night_mode`, not a local clock — by default HA also owns
- * brightness (via the ha/ package), so these only apply if you turn on the
- * PWA's secondary brightness control.
+ * Brightness levels (0–255) for the optional PWA-driven panel-backend path
+ * (`brightness.ts`, gated by `PANEL.BACKEND !== "none"`). Day/night is now
+ * decided by HA's `frame_night_mode`, not a local clock — by default HA also
+ * owns brightness (via the ha/ package), so these only apply if you turn on
+ * the PWA's secondary brightness control.
  */
 export const SCHEDULE = {
   DAY_BRIGHTNESS: 220,

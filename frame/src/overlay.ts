@@ -16,7 +16,7 @@ import {
 } from "./data";
 import type { AcState, FrameState } from "./data";
 import { formatShortDate, pad } from "./format";
-import { restartApp, setBrightness, setScreenOn } from "./brightness";
+import { clearCache, forceRefresh, relaunch, setBrightness, setScreenOn } from "./brightness";
 import { getCurrentEntry, isPaused, stepPhoto, toggleFavourite, togglePause } from "./photos";
 
 let dimTimer = 0;
@@ -441,7 +441,7 @@ function wireFavourite(): void {
   renderFavourite();
 }
 
-// --- Settings panel (Fully Kiosk: brightness / screen off / restart) ----
+// --- Settings panel (panel backend: brightness / screen off / force refresh) ---
 
 let settingsOpen = false;
 
@@ -461,6 +461,26 @@ function closeSettings(): void {
   renderSettings();
 }
 
+// --- Advanced panel (cache/relaunch escape hatches, full-screen takeover) --
+
+let advancedOpen = false;
+
+function renderAdvanced(): void {
+  el("advanced-panel")?.classList.toggle("open", advancedOpen);
+  if (!advancedOpen) hideRestartConfirm();
+}
+
+function openAdvanced(): void {
+  closeSettings();
+  advancedOpen = true;
+  renderAdvanced();
+}
+
+function closeAdvanced(): void {
+  advancedOpen = false;
+  renderAdvanced();
+}
+
 function wireSettings(): void {
   el<HTMLButtonElement>("settings-gear")?.addEventListener("click", () => {
     settingsOpen = !settingsOpen;
@@ -477,15 +497,26 @@ function wireSettings(): void {
     void setScreenOn(false);
   });
 
-  // Restart is destructive-ish (kicks the user off the kiosk app briefly), so
-  // it requires an inline confirm step rather than firing on first tap.
+  el<HTMLButtonElement>("settings-advanced-open")?.addEventListener("click", openAdvanced);
+  el<HTMLButtonElement>("advanced-close")?.addEventListener("click", closeAdvanced);
+
+  el<HTMLButtonElement>("settings-clear-cache")?.addEventListener("click", () => {
+    void clearCache();
+  });
+  el<HTMLButtonElement>("settings-relaunch")?.addEventListener("click", () => {
+    void relaunch();
+  });
+
+  // Force refresh is destructive-ish (kicks the user off the kiosk app
+  // briefly), so it requires an inline confirm step rather than firing on
+  // first tap.
   el<HTMLButtonElement>("settings-restart")?.addEventListener("click", () => {
     el("settings-restart-confirm")?.classList.add("open");
   });
   el<HTMLButtonElement>("settings-restart-confirm-cancel")?.addEventListener("click", hideRestartConfirm);
   el<HTMLButtonElement>("settings-restart-confirm-yes")?.addEventListener("click", () => {
     hideRestartConfirm();
-    void restartApp();
+    void forceRefresh();
   });
 }
 

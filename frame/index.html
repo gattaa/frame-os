@@ -93,24 +93,52 @@
 
           <div class="settings-row">
             <label class="ac-panel-label" for="brightness-slider">Brightness</label>
-            <input type="range" id="brightness-slider" min="0" max="255" step="1" value="200" />
+            <input type="range" id="brightness-slider" min="1" max="255" step="1" value="200" />
           </div>
 
-          <button type="button" class="settings-btn" id="settings-screen-off">
-            Screen off
-            <span class="settings-btn-sub">Wakes on touch — safe to tap</span>
+          <button type="button" class="settings-btn-compact" id="settings-screen-off">
+            <span>Screen off</span>
+            <span class="settings-btn-compact-sub">wakes on next touch</span>
           </button>
 
-          <button type="button" class="settings-btn settings-btn-danger" id="settings-restart">
-            Restart display
-            <span class="settings-btn-sub">Soft-restarts the Fully Kiosk app, not the frame</span>
+          <button type="button" class="settings-link" id="settings-advanced-open">
+            Advanced
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" /></svg>
           </button>
-          <div class="settings-confirm" id="settings-restart-confirm">
-            <p>Restart the display app now?</p>
-            <div class="settings-confirm-actions">
-              <button type="button" id="settings-restart-confirm-cancel">Cancel</button>
-              <button type="button" id="settings-restart-confirm-yes">Restart</button>
-            </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced display controls: cache/relaunch escape hatches for a stale
+         service-worker/kiosk-app state. Rare enough to not clutter the main
+         settings panel — a full-screen takeover, same pattern as gallery. -->
+    <div class="advanced-panel" id="advanced-panel">
+      <div class="gallery-header">
+        <span class="gallery-title">Advanced</span>
+        <button type="button" class="gallery-icon-btn" id="advanced-close" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="advanced-panel-body">
+        <button type="button" class="settings-btn" id="settings-clear-cache">
+          Clear cache
+          <span class="settings-btn-sub">Clears the display app's local cache</span>
+        </button>
+
+        <button type="button" class="settings-btn" id="settings-relaunch">
+          Reload app
+          <span class="settings-btn-sub">Relaunches the display app, not the frame</span>
+        </button>
+
+        <button type="button" class="settings-btn settings-btn-danger" id="settings-restart">
+          Force refresh
+          <span class="settings-btn-sub">Clear cache, then reload — for a stuck/stale display</span>
+        </button>
+        <div class="settings-confirm" id="settings-restart-confirm">
+          <p>Force-refresh the display app now?</p>
+          <div class="settings-confirm-actions">
+            <button type="button" id="settings-restart-confirm-cancel">Cancel</button>
+            <button type="button" id="settings-restart-confirm-yes">Refresh</button>
           </div>
         </div>
       </div>

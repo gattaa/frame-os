@@ -548,16 +548,18 @@ html, body {
 }
 
 /* Settings panel: anchored above the gear button, same solid-fill-first
- * treatment as .ac-panel (blur is progressive enhancement only). */
+ * treatment as .ac-panel (blur is progressive enhancement only). Kept
+ * intentionally light — brightness + screen-off, the two everyday actions —
+ * with rarer escape hatches tucked behind "Advanced" (see .advanced-panel). */
 .settings-panel {
   position: absolute;
   bottom: 92px;
   right: 40px;
-  width: 300px;
+  width: 240px;
   background: var(--panel-bg);
   border: 1px solid var(--panel-line);
-  border-radius: 20px;
-  padding: 20px 22px;
+  border-radius: 18px;
+  padding: 16px 18px;
   color: var(--panel-fg);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
   display: none;
@@ -575,19 +577,117 @@ html, body {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .settings-panel-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 .settings-row {
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 .settings-row input[type="range"] {
   width: 100%;
   accent-color: #fff;
 }
+/* Compact single-line action row (brightness's sibling actions) — a smaller
+ * footprint than the old full-height .settings-btn, for the handful of
+ * everyday toggles that stay in the main panel. */
+.settings-btn-compact {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  padding: 10px 4px;
+  border: none;
+  border-top: 1px solid var(--panel-line);
+  background: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-btn-compact:active {
+  color: rgba(255, 255, 255, 0.7);
+}
+.settings-btn-compact-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--panel-sub);
+}
+.settings-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 10px 4px 0;
+  border: none;
+  border-top: 1px solid var(--panel-line);
+  background: none;
+  color: var(--panel-sub);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-link svg {
+  width: 16px;
+  height: 16px;
+}
+.settings-link:active {
+  color: #fff;
+}
+
+/* Advanced display controls: cache/relaunch escape hatches, rare enough to
+ * live behind a full-screen takeover instead of bulking up .settings-panel.
+ * Same opaque light/dark-theme surface as .gallery-overlay (this is a
+ * takeover screen, not a glass layer over a photo). */
+.advanced-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  display: none;
+  flex-direction: column;
+  background: var(--gallery-bg);
+  color: var(--gallery-fg);
+}
+.advanced-panel.open {
+  display: flex;
+}
+.advanced-panel-body {
+  padding: 0 32px 32px;
+  max-width: 420px;
+}
+.advanced-panel .settings-btn {
+  color: var(--gallery-fg);
+  background: var(--gallery-item-bg);
+  border: 1px solid var(--gallery-item-line);
+}
+.advanced-panel .settings-btn:active {
+  background: var(--gallery-item-line);
+}
+.advanced-panel .settings-btn-sub {
+  color: var(--gallery-sub);
+}
+.advanced-panel .settings-confirm {
+  background: var(--gallery-item-bg);
+  border: 1px solid var(--gallery-item-line);
+}
+.advanced-panel .settings-confirm p {
+  color: var(--gallery-sub);
+}
+.advanced-panel #settings-restart-confirm-cancel {
+  background: var(--gallery-item-line);
+  color: var(--gallery-fg);
+}
+
 .settings-btn {
   width: 100%;
   margin-bottom: 10px;
