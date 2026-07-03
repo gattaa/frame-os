@@ -52,9 +52,18 @@ const WALLPANEL_WAKE_SECONDS = 3600;
 
 async function wallpanelPost(body: Record<string, unknown>): Promise<void> {
   try {
+    // WallPanel's local server sends no CORS headers and 404s its own OPTIONS
+    // preflight, so a plain `Content-Type: application/json` POST (which
+    // forces a preflight) gets blocked outright as a CORS failure — it never
+    // reaches the device. Sending as `text/plain` keeps this a CORS-safelisted
+    // "simple request" (no preflight); WallPanel parses the JSON body
+    // regardless of the declared content type. `mode: "no-cors"` (same as the
+    // legacy Fully client) makes this fire-and-forget so the still-missing
+    // CORS headers on the *response* don't reject the fetch.
     await fetch(`${PANEL.WALLPANEL_BASE}/api/command`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(body),
     });
   } catch (err) {
