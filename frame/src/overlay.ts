@@ -16,8 +16,9 @@ import {
 } from "./data";
 import type { AcState, FrameState } from "./data";
 import { formatShortDate, pad } from "./format";
-import { clearCache, forceRefresh, relaunch, setBrightness, setScreenOn } from "./brightness";
+import { clearCache, forceRefresh, relaunch, setBrightness } from "./brightness";
 import { getCurrentEntry, isPaused, stepPhoto, toggleFavourite, togglePause } from "./photos";
+import { isAutoDimEnabled, setAutoDimEnabled } from "./autodim";
 
 let dimTimer = 0;
 
@@ -256,7 +257,6 @@ function buildPanel(): HTMLElement {
     <div class="ac-panel-header">
       <span class="ac-panel-title">
         <span id="ac-panel-name"></span>
-        <span class="ac-panel-ambient" id="ac-panel-ambient"></span>
       </span>
       <button type="button" class="ac-panel-collapse" id="ac-panel-collapse" aria-label="Collapse">${ICON_CHEVRON}</button>
     </div>
@@ -338,10 +338,8 @@ function renderPanel(acs: AcState[]): void {
   if (badge) panel.style.left = `${badge.offsetLeft}px`;
 
   const name = el("ac-panel-name");
-  const ambient = el("ac-panel-ambient");
   const target = el("ac-panel-target");
   if (name) name.textContent = ac.name;
-  if (ambient) ambient.textContent = ac.current !== null ? `${fmt(ac.current, 1)}° ambiente` : "";
   if (target) target.textContent = ac.target !== null ? `${fmt(ac.target)}°` : "--°";
 
   const modesWrap = el("ac-panel-modes");
@@ -441,9 +439,19 @@ function wireFavourite(): void {
   renderFavourite();
 }
 
-// --- Settings panel (panel backend: brightness / screen off / force refresh) ---
+// --- Settings panel (brightness / auto-dim, + an Advanced takeover) --------
 
 let settingsOpen = false;
+let brightnessDebounce = 0;
+
+/** Instant visual feedback for the fill, decoupled from the (debounced)
+ *  network call — keeps dragging feeling responsive over a slow/local link. */
+function updateBrightnessFill(slider: HTMLInputElement): void {
+  const min = Number(slider.min) || 0;
+  const max = Number(slider.max) || 255;
+  const pct = ((Number(slider.value) - min) / (max - min)) * 100;
+  slider.style.background = `linear-gradient(to right, #fff ${pct}%, rgba(255, 255, 255, 0.18) ${pct}%)`;
+}
 
 function renderSettings(): void {
   const panel = el("settings-panel");
@@ -489,13 +497,27 @@ function wireSettings(): void {
   el<HTMLButtonElement>("settings-close")?.addEventListener("click", closeSettings);
 
   const slider = el<HTMLInputElement>("brightness-slider");
-  slider?.addEventListener("input", () => {
-    void setBrightness(Number(slider.value));
-  });
+  if (slider) {
+    updateBrightnessFill(slider);
+    // 'input' fires on every pixel of drag; debounce the actual network call
+    // so a drag across the track doesn't queue up a burst of requests (that's
+    // what made this feel laggy), while the fill still updates instantly.
+    slider.addEventListener("input", () => {
+      updateBrightnessFill(slider);
+      window.clearTimeout(brightnessDebounce);
+      brightnessDebounce = window.setTimeout(() => {
+        void setBrightness(Number(slider.value));
+      }, 80);
+    });
+  }
 
-  el<HTMLButtonElement>("settings-screen-off")?.addEventListener("click", () => {
-    void setScreenOn(false);
-  });
+  const autodimToggle = el<HTMLInputElement>("autodim-toggle");
+  if (autodimToggle) {
+    autodimToggle.checked = isAutoDimEnabled();
+    autodimToggle.addEventListener("change", () => {
+      setAutoDimEnabled(autodimToggle.checked);
+    });
+  }
 
   el<HTMLButtonElement>("settings-advanced-open")?.addEventListener("click", openAdvanced);
   el<HTMLButtonElement>("advanced-close")?.addEventListener("click", closeAdvanced);

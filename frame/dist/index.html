@@ -10,8 +10,8 @@
     <link rel="apple-touch-icon" href="/local/frame/icons/icon-192.png" />
     <link rel="manifest" href="/local/frame/manifest.webmanifest" />
     <title>frame-os</title>
-    <script type="module" crossorigin src="/local/frame/assets/index-BH1_X_lX.js"></script>
-    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-Doyjc-T9.css">
+    <script type="module" crossorigin src="/local/frame/assets/index-C88lQCxm.js"></script>
+    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-3BODyB1K.css">
     <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();if(location.protocol!="file:"){window.__vite_is_modern_browser=true}</script>
     <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
   </head>
@@ -102,10 +102,16 @@
             <input type="range" id="brightness-slider" min="1" max="255" step="1" value="200" />
           </div>
 
-          <button type="button" class="settings-btn-compact" id="settings-screen-off">
-            <span>Screen off</span>
-            <span class="settings-btn-compact-sub">wakes on next touch</span>
-          </button>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="settings-toggle-label">Auto-dim</span>
+              <span class="settings-btn-compact-sub">dims to minimum when idle</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="autodim-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
 
           <button type="button" class="settings-link" id="settings-advanced-open">
             Advanced
@@ -182,6 +188,6 @@
 
     <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
     <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-B4nVybHF.js"></script>
-    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-CjzSkH5h.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-BFW3uJsr.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
   </body>
 </html>

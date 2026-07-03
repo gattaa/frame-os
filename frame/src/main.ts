@@ -14,6 +14,7 @@ import { startData } from "./data";
 import { startOverlay } from "./overlay";
 import { startGallery } from "./gallery";
 import { startTheme } from "./theme";
+import { startAutoDim } from "./autodim";
 
 function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
@@ -33,6 +34,7 @@ async function boot(): Promise<void> {
   startTheme();      // follow HA night mode (subscribes to the data layer)
   startOverlay();    // clock ticks and controls are live immediately
   startGallery();    // wires the gallery/lightbox controls
+  startAutoDim();    // opt-in idle-brightness dimming
   startData();       // hydrate from cache, then HA/mock (async, non-blocking)
   startSlideshow();  // manifest + crossfade (async, non-blocking)
 

@@ -1,10 +1,10 @@
 /**
- * Kiosk panel backend abstraction — brightness / screen wake / force refresh.
+ * Kiosk panel backend abstraction — brightness / force refresh.
  *
  * The actual HTTP call is behind the small `PanelBackend` interface below so
- * the UI (overlay.ts, theme.ts) never talks to a specific kiosk app's REST
- * API directly. Swapping kiosk apps again later means adding a new backend
- * here, not touching callers. Selected by `PANEL.BACKEND`
+ * the UI (overlay.ts, theme.ts, autodim.ts) never talks to a specific kiosk
+ * app's REST API directly. Swapping kiosk apps again later means adding a new
+ * backend here, not touching callers. Selected by `PANEL.BACKEND`
  * (`VITE_PANEL_BACKEND=wallpanel|fully|none`); "none" (the default) no-ops
  * everywhere, e.g. in desktop dev.
  */
@@ -14,7 +14,6 @@ import { PANEL } from "./config";
 interface PanelBackend {
   /** 1–255. Backends clamp to their own valid range. */
   setBrightness(level: number): Promise<void>;
-  setScreenOn(on: boolean): Promise<void>;
   /** Clear the kiosk app's local cache, without relaunching. */
   clearCache(): Promise<void>;
   /** Relaunch the kiosk app, without clearing its cache. */
@@ -28,9 +27,6 @@ interface PanelBackend {
 const noneBackend: PanelBackend = {
   async setBrightness(level) {
     console.info(`[brightness] (no-op, panel backend "none") setBrightness ${level}`);
-  },
-  async setScreenOn(on) {
-    console.info(`[brightness] (no-op, panel backend "none") setScreenOn ${on}`);
   },
   async clearCache() {
     console.info(`[brightness] (no-op, panel backend "none") clearCache`);
@@ -46,9 +42,6 @@ const noneBackend: PanelBackend = {
 // --- wallpanel: WallPanel's local REST API -----------------------------------
 // POST JSON to http://<device-ip>:2971/api/command. Same-device localhost
 // only, so no ingress/auth token is needed (unlike Fully's password param).
-
-/** How long a `wake: true` command keeps the screen woken, in seconds. */
-const WALLPANEL_WAKE_SECONDS = 3600;
 
 async function wallpanelPost(body: Record<string, unknown>): Promise<void> {
   try {
@@ -76,15 +69,6 @@ const wallpanelBackend: PanelBackend = {
     // WallPanel's brightness command is 1–255 (no 0, unlike Fully's 0–255).
     const clamped = Math.max(1, Math.min(255, Math.round(level)));
     await wallpanelPost({ brightness: clamped });
-  },
-  async setScreenOn(on) {
-    // BEHAVIOR CHANGE from Fully: `{"wake": false}` only *releases* WallPanel's
-    // wake lock — it does not force the screen off immediately. The screen
-    // actually turns off whenever Android's normal display timeout next
-    // fires, not on tap. If an instant-feeling screen-off is wanted, that
-    // needs a separate, short Android display-timeout setting — do not add
-    // that without confirming first.
-    await wallpanelPost(on ? { wake: true, wakeTime: WALLPANEL_WAKE_SECONDS } : { wake: false });
   },
   async clearCache() {
     await wallpanelPost({ clearCache: true });
@@ -125,9 +109,6 @@ const fullyBackend: PanelBackend = {
     const clamped = Math.max(0, Math.min(255, Math.round(level)));
     await fullySend("setStringSetting", { key: "screenBrightness", value: String(clamped) });
   },
-  async setScreenOn(on) {
-    await fullySend(on ? "screenOn" : "screenOff");
-  },
   async clearCache() {
     // Fully has no separate "clear cache without relaunching" command.
     console.info(`[brightness] (unsupported on "fully" backend) clearCache`);
@@ -158,12 +139,6 @@ const backend = selectBackend();
 /** Set screen brightness, 1–255 (backends clamp to their own valid range). */
 export async function setBrightness(level: number): Promise<void> {
   await backend.setBrightness(level);
-}
-
-/** Wake or release-wake the screen. See wallpanelBackend.setScreenOn for a
- *  WallPanel-specific caveat: release-wake is not an instant screen-off. */
-export async function setScreenOn(on: boolean): Promise<void> {
-  await backend.setScreenOn(on);
 }
 
 /** Clear the kiosk app's local cache, without relaunching. */

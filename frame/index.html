@@ -96,10 +96,16 @@
             <input type="range" id="brightness-slider" min="1" max="255" step="1" value="200" />
           </div>
 
-          <button type="button" class="settings-btn-compact" id="settings-screen-off">
-            <span>Screen off</span>
-            <span class="settings-btn-compact-sub">wakes on next touch</span>
-          </button>
+          <div class="settings-toggle-row">
+            <div>
+              <span class="settings-toggle-label">Auto-dim</span>
+              <span class="settings-btn-compact-sub">dims to minimum when idle</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="autodim-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
 
           <button type="button" class="settings-link" id="settings-advanced-open">
             Advanced

@@ -238,3 +238,16 @@ export const SCHEDULE = {
   DAY_BRIGHTNESS: 220,
   NIGHT_BRIGHTNESS: 60,
 } as const;
+
+/**
+ * Auto-dim (see autodim.ts): an opt-in toggle (persisted in localStorage, set
+ * from the settings panel) that drops brightness to AUTO_DIM_BRIGHTNESS after
+ * AFTER_MS of no touch, and restores the day/night SCHEDULE level on the next
+ * touch. Independent of OVERLAY.DIM_AFTER_MS, which only fades the on-screen
+ * chrome (a few seconds) — this is a much longer real-departure timeout for
+ * the physical backlight.
+ */
+export const AUTO_DIM = {
+  AFTER_MS: 5 * 60_000,
+  BRIGHTNESS: 20,
+} as const;
