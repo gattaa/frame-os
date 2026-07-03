@@ -111,6 +111,13 @@ html, body {
   background: #000000;
 }
 
+/* Width is capped well short of .ov-nav's left edge (482px at 1280 wide —
+ * 5 buttons centered at the bottom). left:40 + width:420 puts the caption's
+ * right edge at 460, a 22px gap from the button row, so even a full 3-line
+ * caption can never reach under the nav buttons horizontally. Vertically the
+ * two boxes' bounding rects do overlap (there isn't enough room above the
+ * nav row for 3 lines of 32px text otherwise), but with the x-ranges
+ * disjoint that never turns into a visible/clickable collision. */
 #photo-meta {
   position: absolute;
   left: 40px;
@@ -118,20 +125,34 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  max-width: 640px;
+  width: 420px;
   color: #fff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
   z-index: 2;
 }
+/* Fixed-height reservation, not just truncation: line-height * 3 lines is
+ * set as both max-height and min-height so the caption block never grows
+ * taller (long text) or shrinks shorter (short/empty text) than a 3-line
+ * slot, keeping #photo-meta's footprint constant regardless of caption
+ * length. Character-cap the source string to match (see CAPTION_MAX_CHARS
+ * in photos.ts) — the line-clamp below is the visual backstop either way. */
 #caption {
   font-size: 32px;
   font-weight: 500;
-  max-width: 100%;
+  line-height: 1.25;
+  width: 100%;
+  min-width: 0;
+  max-height: calc(1.25em * 3);
+  min-height: calc(1.25em * 3);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
-#caption:empty { display: none; }
+#caption:empty { display: none; min-height: 0; }
 #sender-chip {
   margin-top: 4px;
   font-size: 19px;

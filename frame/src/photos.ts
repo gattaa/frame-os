@@ -61,6 +61,18 @@ export function thumbUrl(file: string): string {
 
 const RECENT_NON_FAVOURITE_COUNT = 10;
 
+/** #caption is a 420px-wide, 32px/500, 3-line-clamped box (see styles.css) —
+ *  measured against the actual font stack, that width fits ~26 chars per
+ *  wrapped line, so 78 chars is roughly a full 3 lines. The CSS line-clamp
+ *  is the real visual backstop; this cap just keeps arbitrarily long
+ *  captions out of the DOM/measurement work. */
+const CAPTION_MAX_CHARS = 78;
+
+function truncateCaption(caption: string): string {
+  if (caption.length <= CAPTION_MAX_CHARS) return caption;
+  return `${caption.slice(0, CAPTION_MAX_CHARS - 1).trimEnd()}…`;
+}
+
 function shuffle<T>(list: T[]): T[] {
   const out = list.slice();
   for (let i = out.length - 1; i > 0; i--) {
@@ -148,7 +160,7 @@ async function show(entry: ManifestEntry): Promise<void> {
     const ts = new Date(entry.ts);
     const dateStr = Number.isNaN(ts.getTime()) ? "" : formatShortDate(ts);
     if (chip) chip.textContent = [entry.uploader, dateStr].filter(Boolean).join(" · ");
-    if (cap) cap.textContent = entry.caption || "";
+    if (cap) cap.textContent = truncateCaption(entry.caption || "");
     if (meta) meta.style.display = entry.uploader || entry.caption ? "flex" : "none";
 
     // Crossfade: bring back to front.
