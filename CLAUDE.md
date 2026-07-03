@@ -71,10 +71,18 @@ This is the central design rule. Keep these boundaries clean:
 
 - **The display only ever READS** `data/photos/`, `data/thumbs/`, and
   `data/manifest.json`. It never writes them and never talks to ingest
-  channels directly. The one exception is `POST /favourite`, a narrow,
-  purpose-built endpoint on the processor's own add-on (not a generic write
-  API) that the display calls to flip one manifest entry's `favourite` flag —
-  the processor remains the only thing that actually touches the file.
+  channels directly. The one *designed* exception is `POST /favourite`, a
+  narrow, purpose-built endpoint on the processor's own add-on (not a generic
+  write API) that the display calls to flip one manifest entry's `favourite`
+  flag — the processor remains the only thing that actually touches the file.
+  **As of `VITE_FAVOURITES_BACKEND=local` (the current default, see
+  `frame/src/config.ts`'s `FAVOURITES`), this exception is dormant**:
+  favourite state lives only in the display's own `localStorage`, and the
+  contract is fully read-only in practice. Flip that flag to `server` (once
+  the frame-uploader add-on's mapped-port fallback + `runtime-config.json`'s
+  `uploaderUrl`/`uploaderToken` are wired up — see
+  `haos-addons/frame-uploader/DOCS.md`, "Alternative: mapped port") to
+  restore the original round-trip design.
 - **The processor is the ONLY writer** to `data/photos/`, `data/thumbs/`, and
   `data/manifest.json`. It handles resize/orientation/format normalization,
   thumbnail generation, dedupe, ordering, and manifest generation.

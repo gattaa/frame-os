@@ -15,7 +15,7 @@
  * / rebuildRotation()) so it doesn't feel like a fixed loop.
  */
 
-import { PATHS, SLIDESHOW, UPLOADER, favouriteUrl } from "./config";
+import { FAVOURITES, PATHS, SLIDESHOW, UPLOADER, favouriteUrl } from "./config";
 import { formatShortDate } from "./format";
 
 export interface ManifestEntry {
@@ -261,6 +261,7 @@ async function fetchManifest(): Promise<ManifestEntry[] | null> {
     // Order by ts ascending — a stable base list; the rotation shuffles its
     // own subset independently (see computeRotation()).
     list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    applyLocalFavouritesOverride(list);
     return list;
   } catch (err) {
     console.warn("[photos] manifest fetch failed; SW cache may serve it", err);
@@ -313,6 +314,43 @@ function favouriteHeaders(): Record<string, string> {
   return headers;
 }
 
+// --- Local-only favourites (FAVOURITES.BACKEND === "local", the default) ---
+// Favourite state lives entirely in this device's localStorage, keyed by
+// photo id — no network round-trip, no dependency on the frame-uploader
+// add-on's mapped-port fallback being set up. See config.ts's FAVOURITES for
+// the "server" alternative and why "local" is the default today.
+
+const LOCAL_FAVOURITES_KEY = "frame:favourites";
+
+function loadLocalFavourites(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_FAVOURITES_KEY);
+    const ids: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(ids) ? ids.map(String) : []);
+  } catch (err) {
+    console.warn("[photos] failed to read local favourites; treating as empty", err);
+    return new Set();
+  }
+}
+
+function saveLocalFavourites(ids: Set<string>): void {
+  try {
+    localStorage.setItem(LOCAL_FAVOURITES_KEY, JSON.stringify([...ids]));
+  } catch (err) {
+    console.warn("[photos] failed to persist local favourites", err);
+  }
+}
+
+/** In "local" mode, this device's localStorage is the sole source of truth
+ *  for `favourite` — override whatever the manifest says (it'll always say
+ *  false, since nothing ever POSTs a change back to it in this mode) on
+ *  every fetch. No-op in "server" mode, where the manifest is authoritative. */
+function applyLocalFavouritesOverride(list: ManifestEntry[]): void {
+  if (FAVOURITES.BACKEND !== "local") return;
+  const ids = loadLocalFavourites();
+  for (const entry of list) entry.favourite = ids.has(entry.id);
+}
+
 /** Recompute rotation membership from `entries`, but only actually replace
  *  (and reshuffle) `rotation` if the set of ids changed — e.g. a favourite
  *  toggle that doesn't move a photo in or out of the rotation set leaves the
@@ -340,13 +378,20 @@ function syncRotationMembership(preserveId?: string): void {
 const favouriteRequestGen = new Map<string, number>();
 
 /**
- * Optimistically flip `favourite` on the entry with this id, POST it to the
- * frame-uploader add-on, and reconcile with the server's response — reverts
- * on failure. If the uploader isn't configured (dev/mock, or a box that
- * hasn't set up the mapped-port fallback — see config.ts's `favouriteUrl()`),
- * the optimistic update is treated as final, same spirit as the AC controls'
- * dev-mode no-op in data.ts. Returns the final favourite state so the caller
- * (overlay.ts's heart button, gallery.ts's grid/lightbox) can update its icon.
+ * Optimistically flip `favourite` on the entry with this id, then persist it
+ * via whichever backend `FAVOURITES.BACKEND` selects (config.ts):
+ *
+ * - "local" (default): write straight to this device's localStorage, no
+ *   network involved — see applyLocalFavouritesOverride() above. Always
+ *   succeeds; there's nothing to revert.
+ * - "server": POST to the frame-uploader add-on and reconcile with its
+ *   response — reverts on failure. If the uploader isn't configured (dev/
+ *   mock, or a box that hasn't set up the mapped-port fallback — see
+ *   config.ts's `favouriteUrl()`), the optimistic update is treated as
+ *   final, same spirit as the AC controls' dev-mode no-op in data.ts.
+ *
+ * Either way, returns the final favourite state so the caller (overlay.ts's
+ * heart button, gallery.ts's grid/lightbox) can update its icon.
  *
  * Safe against overlapping calls for the same id (e.g. a fast double-tap): a
  * generation counter per id means only the response to the MOST RECENT
@@ -360,6 +405,14 @@ export async function toggleFavourite(id: string): Promise<boolean> {
   if (!entry) return false;
   const prev = entry.favourite;
   entry.favourite = !prev;
+
+  if (FAVOURITES.BACKEND === "local") {
+    const ids = loadLocalFavourites();
+    if (entry.favourite) ids.add(id); else ids.delete(id);
+    saveLocalFavourites(ids);
+    syncRotationMembership(rotation[idx] ? rotation[idx].id : undefined);
+    return entry.favourite;
+  }
 
   const gen = (favouriteRequestGen.get(id) || 0) + 1;
   favouriteRequestGen.set(id, gen);

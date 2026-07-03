@@ -175,6 +175,28 @@ export const PANEL = {
   FULLY_PASSWORD: str("VITE_FULLY_PASSWORD", ""),
 } as const;
 
+// --- Favourites backend (see photos.ts's toggleFavourite()) -----------------
+// "local" (default): favourite state lives only in this device's
+// localStorage, no network round-trip — CLAUDE.md's read-only-display
+// contract is temporarily relaxed to "read-only except a local-only UI
+// preference," not touching the manifest at all. "server" restores the
+// original design (POST /favourite to the frame-uploader add-on, the
+// documented one exception to display-only-reads) — only useful once the
+// add-on's mapped-port fallback + runtime-config.json's uploaderUrl/
+// uploaderToken are actually wired up (see haos-addons/frame-uploader/DOCS.md
+// "Alternative: mapped port"); until then it's a silent no-op, which is
+// exactly why "local" is the default.
+
+export type FavouritesBackendKind = "local" | "server";
+
+function favouritesBackend(): FavouritesBackendKind {
+  return str("VITE_FAVOURITES_BACKEND", "local") === "server" ? "server" : "local";
+}
+
+export const FAVOURITES = {
+  BACKEND: favouritesBackend(),
+} as const;
+
 // --- Data paths (served at <base>* directly; see vite.config.ts) -----------
 // The frame-uploader add-on writes manifest.json/photos/ straight into
 // config/www/frame/ (no data/ subfolder), served by HA at /local/frame/.
