@@ -262,9 +262,26 @@ async function connectLive(): Promise<void> {
     conn.addEventListener("disconnected", () => emit({ connected: false, stale: true }));
     conn.addEventListener("ready", () => emit({ connected: true, stale: false }));
 
+    // subscribeEntities() fires on EVERY state_changed event in the whole HA
+    // instance (it has no per-entity filter), not just our handful of tracked
+    // entities — a busy house can mean many callbacks/sec. The library only
+    // replaces an entity's object reference when that entity actually
+    // changes, so a cheap per-id reference comparison against the entities we
+    // actually care about lets us skip fromEntityMap()/emit() (and the full
+    // overlay re-render it triggers) for the vast majority of updates that
+    // are about something unrelated (a light, a motion sensor, etc.).
+    let lastTracked: Record<string, HassLike | undefined> = {};
     haws.subscribeEntities(conn, (entities: Record<string, HassLike>) => {
+      const ids = getSubscribedEntityIds();
       const map: Record<string, HassLike | undefined> = {};
-      for (const id of getSubscribedEntityIds()) map[id] = entities[id];
+      let changed = false;
+      for (const id of ids) {
+        const e = entities[id];
+        map[id] = e;
+        if (e !== lastTracked[id]) changed = true;
+      }
+      if (!changed) return;
+      lastTracked = map;
       emit(fromEntityMap(map));
       void persist();
     });
