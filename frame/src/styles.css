@@ -34,6 +34,9 @@
   --badge-line-selected: rgba(255, 255, 255, 0.42);
   --flame: #e8a066;
   --ice: #8fc7e8;
+  /* Filled-heart accent (favourite toggle) — fixed, not currentColor, so it
+     reads clearly against any nav-btn/gallery-item background. */
+  --favourite: #ff4d6d;
 
   /* Gallery: the one opaque, full-screen UI surface in this app (everything
      else sits transparent over a photo), so it's where the light-theme-
@@ -896,7 +899,8 @@ html, body {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 20px;
   padding: 28px 32px 16px;
 }
 .gallery-title {

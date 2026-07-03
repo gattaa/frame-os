@@ -180,10 +180,12 @@ const HEART_PATH = "M12 21s-7.5-4.686-10-9.033C.686 8.5 2.5 5 6 5c2 0 3.5 1 6 3.
 
 /** Filled heart = favourite, outline = not — path-only (no <svg> wrapper) so
  *  it can be swapped via .innerHTML on an existing <svg>, same pattern as
- *  the play/pause icon above. */
+ *  the play/pause icon above. Filled state uses a fixed red (not
+ *  currentColor) — a solid-vs-outline swap in the same white was too subtle
+ *  to read as "toggled" at a glance from across a room. */
 export function heartIconPath(filled: boolean): string {
   return filled
-    ? `<path fill="currentColor" d="${HEART_PATH}"/>`
+    ? `<path fill="var(--favourite)" d="${HEART_PATH}"/>`
     : `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="${HEART_PATH}"/>`;
 }
 
