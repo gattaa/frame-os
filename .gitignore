@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!frame/.env
 secrets.yaml
 ha/secrets.yaml
 *.secret
