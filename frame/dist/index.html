@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en" data-theme="light">
   <head>
-    <script type="module" crossorigin src="/local/frame/assets/polyfills-D8XIVfss.js"></script>
+    <script type="module" crossorigin src="/local/frame/assets/polyfills-CUCIvyRW.js"></script>
 
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -10,8 +10,8 @@
     <link rel="apple-touch-icon" href="/local/frame/icons/icon-192.png" />
     <link rel="manifest" href="/local/frame/manifest.webmanifest" />
     <title>frame-os</title>
-    <script type="module" crossorigin src="/local/frame/assets/index-DHtpXQe7.js"></script>
-    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-CQa-Zkyn.css">
+    <script type="module" crossorigin src="/local/frame/assets/index-CHUTDpMn.js"></script>
+    <link rel="stylesheet" crossorigin href="/local/frame/assets/index-Doyjc-T9.css">
     <script type="module">import.meta.url;import("_").catch(()=>1);(async function*(){})().next();if(location.protocol!="file:"){window.__vite_is_modern_browser=true}</script>
     <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy chunks, syntax error above and the same error below should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
   </head>
@@ -99,24 +99,52 @@
 
           <div class="settings-row">
             <label class="ac-panel-label" for="brightness-slider">Brightness</label>
-            <input type="range" id="brightness-slider" min="0" max="255" step="1" value="200" />
+            <input type="range" id="brightness-slider" min="1" max="255" step="1" value="200" />
           </div>
 
-          <button type="button" class="settings-btn" id="settings-screen-off">
-            Screen off
-            <span class="settings-btn-sub">Wakes on touch — safe to tap</span>
+          <button type="button" class="settings-btn-compact" id="settings-screen-off">
+            <span>Screen off</span>
+            <span class="settings-btn-compact-sub">wakes on next touch</span>
           </button>
 
-          <button type="button" class="settings-btn settings-btn-danger" id="settings-restart">
-            Restart display
-            <span class="settings-btn-sub">Soft-restarts the Fully Kiosk app, not the frame</span>
+          <button type="button" class="settings-link" id="settings-advanced-open">
+            Advanced
+            <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6" /></svg>
           </button>
-          <div class="settings-confirm" id="settings-restart-confirm">
-            <p>Restart the display app now?</p>
-            <div class="settings-confirm-actions">
-              <button type="button" id="settings-restart-confirm-cancel">Cancel</button>
-              <button type="button" id="settings-restart-confirm-yes">Restart</button>
-            </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced display controls: cache/relaunch escape hatches for a stale
+         service-worker/kiosk-app state. Rare enough to not clutter the main
+         settings panel — a full-screen takeover, same pattern as gallery. -->
+    <div class="advanced-panel" id="advanced-panel">
+      <div class="gallery-header">
+        <span class="gallery-title">Advanced</span>
+        <button type="button" class="gallery-icon-btn" id="advanced-close" aria-label="Close">
+          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="advanced-panel-body">
+        <button type="button" class="settings-btn" id="settings-clear-cache">
+          Clear cache
+          <span class="settings-btn-sub">Clears the display app's local cache</span>
+        </button>
+
+        <button type="button" class="settings-btn" id="settings-relaunch">
+          Reload app
+          <span class="settings-btn-sub">Relaunches the display app, not the frame</span>
+        </button>
+
+        <button type="button" class="settings-btn settings-btn-danger" id="settings-restart">
+          Force refresh
+          <span class="settings-btn-sub">Clear cache, then reload — for a stuck/stale display</span>
+        </button>
+        <div class="settings-confirm" id="settings-restart-confirm">
+          <p>Force-refresh the display app now?</p>
+          <div class="settings-confirm-actions">
+            <button type="button" id="settings-restart-confirm-cancel">Cancel</button>
+            <button type="button" id="settings-restart-confirm-yes">Refresh</button>
           </div>
         </div>
       </div>
@@ -153,7 +181,7 @@
     </div>
 
     <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
-    <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-0LH2EoBj.js"></script>
-    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-vSwnhq1y.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+    <script nomodule crossorigin id="vite-legacy-polyfill" src="/local/frame/assets/polyfills-legacy-B4nVybHF.js"></script>
+    <script nomodule crossorigin id="vite-legacy-entry" data-src="/local/frame/assets/index-legacy-7kOBBFIv.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
   </body>
 </html>
