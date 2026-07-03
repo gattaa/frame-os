@@ -489,6 +489,30 @@ function closeAdvanced(): void {
   renderAdvanced();
 }
 
+// Escape hatch back to the stock Frameo app (the frame's original vendor
+// software, still installed alongside this PWA). Not a normal user flow —
+// see the "Open Frameo" button's low-visibility styling in index.html.
+const FRAMEO_INTENT_URL =
+  "intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=net.frameo.frame/.ui.activities.AWaitForDeferredInitCompleted;end";
+
+function openFrameo(): void {
+  try {
+    window.location.href = FRAMEO_INTENT_URL;
+  } catch (err) {
+    console.warn("Frameo launch intent may be blocked by WebView", err);
+    return;
+  }
+  // A successful intent:// hand-off backgrounds this page (visibilitychange)
+  // well before this fires. Still visible after ~1s means the WebView
+  // silently swallowed the navigation — log it so that's a clear signal
+  // during testing rather than a quiet no-op.
+  window.setTimeout(() => {
+    if (!document.hidden) {
+      console.warn("Frameo launch intent may be blocked by WebView — page still visible after 1s");
+    }
+  }, 1000);
+}
+
 function wireSettings(): void {
   el<HTMLButtonElement>("settings-gear")?.addEventListener("click", () => {
     settingsOpen = !settingsOpen;
@@ -540,6 +564,8 @@ function wireSettings(): void {
     hideRestartConfirm();
     void forceRefresh();
   });
+
+  el<HTMLButtonElement>("settings-open-frameo")?.addEventListener("click", openFrameo);
 }
 
 // --- Top-level render ---------------------------------------------------

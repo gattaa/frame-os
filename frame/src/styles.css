@@ -831,6 +831,28 @@ html, body {
   color: #fff;
 }
 
+/* Deliberately low-visibility — a fallback/escape path, not a normal user
+ * flow (see openFrameo() in overlay.ts). Plain muted text, no card/background,
+ * set apart from the real actions above by extra top margin. */
+.settings-escape-link {
+  display: block;
+  width: 100%;
+  margin-top: 28px;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: var(--gallery-sub);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-escape-link:active {
+  color: var(--gallery-fg);
+}
+
 /* Stale dot: outside #overlay so it stays visible (dim, not gone) even while
  * the overlay is hidden — the one thing worth a glance without touching. */
 #stale-dot {

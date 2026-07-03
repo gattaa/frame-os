@@ -147,6 +147,11 @@
             <button type="button" id="settings-restart-confirm-yes">Refresh</button>
           </div>
         </div>
+
+        <!-- Escape hatch back to the stock Frameo app, not a normal user
+             flow — kept low-visibility on purpose (see openFrameo() in
+             overlay.ts for the fallback/failure-detection behavior). -->
+        <button type="button" class="settings-escape-link" id="settings-open-frameo">Open Frameo</button>
       </div>
     </div>
 
