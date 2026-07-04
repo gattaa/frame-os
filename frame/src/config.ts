@@ -51,6 +51,14 @@ export const ENTITIES = {
    */
   CLIMATES: [] as string[],
   /**
+   * A single `calendar.*` entity (HA's native Google Calendar integration).
+   * Its state only carries the *next* event, so the agenda tile fetches a list
+   * via the `calendar.get_events` service — see fetchCalendar() in data.ts.
+   * Stays the placeholder until loadRuntimeConfig() resolves; the placeholder
+   * value doubles as the "not configured" signal (isCalendarConfigured()).
+   */
+  CALENDAR: "__mock_calendar__",
+  /**
    * Single source of truth for day/night — an HA input_boolean driven by the
    * ha/ package (sun elevation + override). The PWA reads this for its theme
    * instead of guessing from the local clock, so theme and the HA-driven screen
@@ -71,6 +79,13 @@ export function getSubscribedEntityIds(): string[] {
     ENTITIES.NIGHT_MODE,
     ...ENTITIES.CLIMATES,
   ];
+}
+
+/** True once a real `calendar.*` entity has been supplied via runtime-config.
+ *  While it's still the placeholder we skip the live agenda fetch entirely,
+ *  the same way CLIMATES stays empty until configured. */
+export function isCalendarConfigured(): boolean {
+  return ENTITIES.CALENDAR !== "" && ENTITIES.CALENDAR !== "__mock_calendar__";
 }
 
 // --- Remote endpoints (Home Assistant, frame-uploader) -----------------------
@@ -117,6 +132,8 @@ interface RuntimeHaConfig {
     housePower: string;
     climates: string[];
     weather: string;
+    /** Optional: a `calendar.*` entity to drive the overlay's agenda tile. */
+    calendar?: string;
   };
   /** Optional: only needed to enable the gallery's favourite toggle. */
   uploaderUrl?: string;
@@ -147,6 +164,7 @@ export async function loadRuntimeConfig(): Promise<void> {
       ENTITIES.HOUSE_POWER = cfg.entities.housePower || ENTITIES.HOUSE_POWER;
       ENTITIES.CLIMATES = Array.isArray(cfg.entities.climates) ? cfg.entities.climates : ENTITIES.CLIMATES;
       ENTITIES.WEATHER = cfg.entities.weather || ENTITIES.WEATHER;
+      ENTITIES.CALENDAR = cfg.entities.calendar || ENTITIES.CALENDAR;
     }
   } catch (err) {
     console.warn("[config] no runtime-config.json; falling back to mock mode", err);
@@ -247,6 +265,21 @@ export const OVERLAY = {
   /** Fade the overlay to its dim resting state this long after the last touch;
    *  a touch anywhere brings it back to full opacity. */
   DIM_AFTER_MS: 8_000,
+} as const;
+
+/**
+ * Agenda tile (see renderCalendar() in overlay.ts, fetchCalendar() in data.ts).
+ * Only active when runtime-config supplies a `calendar.*` entity
+ * (isCalendarConfigured()). Events come from HA's `calendar.get_events`
+ * service over the existing websocket, re-fetched every REFRESH_MS.
+ */
+export const CALENDAR = {
+  /** How far ahead to ask HA for events (window end = now + this). */
+  DAYS_AHEAD: 14,
+  /** Cap on rendered rows, newest-soonest first. */
+  MAX_EVENTS: 5,
+  /** Re-fetch cadence — events change slowly, so this is generous. */
+  REFRESH_MS: 15 * 60_000,
 } as const;
 
 /**

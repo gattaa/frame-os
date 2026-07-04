@@ -6,7 +6,8 @@
     "batteryStatus": "sensor.solaredge_battery1_status",
     "housePower": "sensor.house_power",
     "climates": ["climate.attic", "climate.living_room", "climate.dining_room", "climate.bedroom"],
-    "weather": "weather.forecast_home"
+    "weather": "weather.forecast_home",
+    "calendar": "calendar.family"
   },
   "uploaderUrl": "http://homeassistant.local:8099",
   "uploaderToken": "REPLACE_WITH_THE_SAME_upload_token_FROM_THE_ADD-ON_CONFIG"

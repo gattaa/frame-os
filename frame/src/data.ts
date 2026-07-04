@@ -9,10 +9,12 @@
  */
 
 import {
+  CALENDAR,
   ENTITIES,
   HA,
   PATHS,
   getSubscribedEntityIds,
+  isCalendarConfigured,
   loadRuntimeConfig,
   USE_MOCK,
 } from "./config";
@@ -32,6 +34,15 @@ export interface AcState {
   fanModes: string[];
 }
 
+export interface CalendarEvent {
+  /** Event title (HA `summary`); "" when the calendar gives none. */
+  summary: string;
+  /** Start time as epoch ms (local-parsed). */
+  start: number;
+  /** All-day events carry a date-only start and render without a time. */
+  allDay: boolean;
+}
+
 export interface FrameState {
   battery: number | null;
   /**
@@ -48,6 +59,12 @@ export interface FrameState {
   weatherTemp: number | null;
   /** HA day/night source of truth; null when unknown. true = night. */
   nightMode: boolean | null;
+  /**
+   * Upcoming calendar events, soonest first (already capped to
+   * CALENDAR.MAX_EVENTS). null = unconfigured/never-fetched (tile hidden);
+   * [] = configured but nothing scheduled in the window.
+   */
+  calendar: CalendarEvent[] | null;
   updatedAt: number;
   connected: boolean;
   stale: boolean;
@@ -63,6 +80,7 @@ const EMPTY: FrameState = {
   weather: null,
   weatherTemp: null,
   nightMode: null,
+  calendar: null,
   updatedAt: 0,
   connected: false,
   stale: true,
@@ -154,6 +172,51 @@ function weatherTempFrom(weather: HassLike | undefined): number | null {
   return num(weather.attributes?.["temperature"]);
 }
 
+/**
+ * Normalize the raw events from `calendar.get_events` (or the mock feed) into
+ * CalendarEvent[]. Each raw `start` is either a date-only string ("2024-07-04",
+ * all-day) or a datetime with offset ("2024-07-04T14:00:00+02:00"); some HA
+ * versions/response shapes nest it as `{ date | dateTime }`. Anything
+ * unparseable is dropped rather than rendered as an invalid row. Sorted
+ * soonest-first and capped to CALENDAR.MAX_EVENTS.
+ */
+interface RawEvent {
+  summary?: unknown;
+  start?: unknown;
+}
+
+function eventStartString(start: unknown): string | null {
+  if (typeof start === "string") return start;
+  if (start && typeof start === "object") {
+    const o = start as Record<string, unknown>;
+    const v = o["dateTime"] ?? o["date"];
+    return typeof v === "string" ? v : null;
+  }
+  return null;
+}
+
+function normalizeEvents(raw: unknown): CalendarEvent[] {
+  const list = Array.isArray(raw) ? (raw as RawEvent[]) : [];
+  const events: CalendarEvent[] = [];
+  for (const e of list) {
+    const s = eventStartString(e.start);
+    if (s === null) continue;
+    const ms = Date.parse(s);
+    if (!Number.isFinite(ms)) continue;
+    // A date-only start ("2024-07-04", no "T") is an all-day event; Date.parse
+    // treats it as UTC midnight, so re-anchor to local midnight for display.
+    const allDay = !s.includes("T");
+    const start = allDay ? new Date(s + "T00:00:00").getTime() : ms;
+    events.push({
+      summary: typeof e.summary === "string" ? e.summary : "",
+      start: Number.isFinite(start) ? start : ms,
+      allDay,
+    });
+  }
+  events.sort((a, b) => a.start - b.start);
+  return events.slice(0, CALENDAR.MAX_EVENTS);
+}
+
 /** One AcState per configured climate entity; entities that aren't in the map are omitted. */
 function acsFromEntityMap(map: Record<string, HassLike | undefined>): AcState[] {
   return ENTITIES.CLIMATES
@@ -204,6 +267,8 @@ interface MockEntities {
   acs?: HassLike[];
   weather?: HassLike;
   night_mode?: HassLike;
+  /** Raw event list, same shape as `calendar.get_events` returns (start string + summary). */
+  calendar?: RawEvent[];
 }
 
 async function pollMock(): Promise<void> {
@@ -226,7 +291,10 @@ async function pollMock(): Promise<void> {
     // here: on the frame, /data is served from the local host, so onLine can be
     // false (no internet) while the data is perfectly fresh over the LAN.
     const stale = res.headers.get("X-From-Cache") === "1";
-    emit({ ...fromEntityMap(map), acs, connected: !stale, stale });
+    // A `calendar` key present but empty is a real "nothing scheduled" ([]);
+    // absent entirely means the mock has no calendar, so hide the tile (null).
+    const calendar = j.calendar !== undefined ? normalizeEvents(j.calendar) : null;
+    emit({ ...fromEntityMap(map), acs, calendar, connected: !stale, stale });
     await persist();
   } catch (err) {
     // Offline (e.g. throttled reload): keep last-known, mark stale.
@@ -288,6 +356,36 @@ async function connectLive(): Promise<void> {
   } catch (err) {
     console.error("[data] HA connection failed; using last-known", err);
     emit({ connected: false, stale: true });
+  }
+}
+
+// --- Calendar agenda --------------------------------------------------------
+
+/**
+ * Fetch the upcoming agenda via the `calendar.get_events` service over the
+ * existing websocket connection (returnResponse), rather than reading entity
+ * state (which only exposes the single next event) or a REST endpoint (which
+ * would hit CORS when HA.BASE_URL differs from the frame's origin). No-op until
+ * the connection is up and a real calendar entity is configured. On any failure
+ * we keep the last-known agenda instead of blanking the tile.
+ */
+async function fetchCalendar(): Promise<void> {
+  if (!isCalendarConfigured() || !conn) return;
+  try {
+    const haws = await getHaws();
+    const now = new Date();
+    const end = new Date(now.getTime() + CALENDAR.DAYS_AHEAD * 24 * 60 * 60 * 1000);
+    const resp = await haws.callService(
+      conn, "calendar", "get_events",
+      { start_date_time: now.toISOString(), end_date_time: end.toISOString() },
+      { entity_id: ENTITIES.CALENDAR },
+      true,
+    ) as { response?: Record<string, { events?: unknown } | undefined> };
+    const bucket = resp && resp.response ? resp.response[ENTITIES.CALENDAR] : undefined;
+    emit({ calendar: normalizeEvents(bucket ? bucket.events : []) });
+    void persist();
+  } catch (err) {
+    console.warn("[data] calendar fetch failed; keeping last-known", err);
   }
 }
 
@@ -403,6 +501,10 @@ export async function startData(): Promise<void> {
     window.setInterval(() => void pollMock(), 30_000);
   } else {
     await connectLive();
+    if (isCalendarConfigured()) {
+      await fetchCalendar();
+      window.setInterval(() => void fetchCalendar(), CALENDAR.REFRESH_MS);
+    }
   }
   startFreshnessWatch();
 }

@@ -252,6 +252,67 @@ html, body {
   margin-left: 2px;
 }
 
+/* --- Calendar agenda tile ---------------------------------------------------
+ * A few upcoming events under the stats. Unlike the single-line stats above it
+ * carries multiple small rows, so it gets its own solid semi-opaque panel for
+ * legibility over any photo — a plain drop-shadow isn't enough for a block of
+ * small text. No backdrop-filter (see CLAUDE.md); themes via existing vars. */
+.ov-calendar {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 340px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-line);
+  text-align: left;
+  text-shadow: none;
+}
+.ov-calendar.hidden {
+  display: none;
+}
+.ov-calendar-icon {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--panel-sub);
+}
+.ov-calendar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0; /* let rows shrink so titles can ellipsis */
+}
+.ov-cal-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 18px;
+  line-height: 1.15;
+  min-width: 0;
+}
+.ov-cal-when {
+  flex-shrink: 0;
+  color: var(--panel-sub);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ov-cal-title {
+  min-width: 0;
+  color: var(--panel-fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-cal-empty {
+  font-size: 17px;
+  color: var(--panel-sub);
+}
+
 /* Top-left: one badge per AC room + its expand panel. Badges/panel get their
  * own solid background since (unlike the text above) they need contrast
  * against any photo, not just a drop-shadow. */
