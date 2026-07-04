@@ -53,6 +53,21 @@
             <span id="house-power">--</span>
           </span>
         </div>
+
+        <!-- Agenda tile: next few Google Calendar events (via HA). Hidden until
+             the data layer supplies events; rows filled by renderCalendar() in
+             overlay.ts. Solid semi-opaque fill (no backdrop-filter). -->
+        <div id="ov-calendar" class="ov-calendar hidden">
+          <span class="ov-calendar-icon ov-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+              <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="2" />
+              <line x1="8" y1="3" x2="8" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="16" y1="3" x2="16" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </span>
+          <div id="ov-calendar-list" class="ov-calendar-list"></div>
+        </div>
       </div>
 
       <div class="ov-badges" id="ac-badges"></div>

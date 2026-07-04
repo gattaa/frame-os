@@ -14,8 +14,8 @@ import { OVERLAY } from "./config";
 import {
   acCool, acHeat, acOff, getState, onState, setAcFanMode, stepAcTarget,
 } from "./data";
-import type { AcState, FrameState } from "./data";
-import { formatShortDate, pad } from "./format";
+import type { AcState, CalendarEvent, FrameState } from "./data";
+import { formatEventWhen, formatShortDate, pad } from "./format";
 import { clearCache, forceRefresh, relaunch, setBrightness } from "./brightness";
 import { getCurrentEntry, isPaused, stepPhoto, toggleFavourite, togglePause } from "./photos";
 import { isAutoDimEnabled, setAutoDimEnabled } from "./autodim";
@@ -134,6 +134,53 @@ function renderWeather(state: string | null, temp: number | null): void {
   icon.innerHTML = WEATHER_ICONS[entry ? entry.icon : "unknown"];
   wrap.setAttribute("aria-label", entry ? entry.label : titleCase(state));
   tempEl.textContent = temp !== null ? `${Math.round(temp)}°` : "";
+}
+
+// --- Calendar agenda --------------------------------------------------------
+
+// null renders as a distinct key so it never collides with an empty agenda
+// (whose event-join is also ""), which would otherwise skip the un-hide.
+let lastCalKey = "__null__";
+
+function renderCalendar(events: CalendarEvent[] | null): void {
+  const wrap = el("ov-calendar");
+  const list = el("ov-calendar-list");
+  if (!wrap || !list) return;
+
+  if (events === null) {
+    wrap.classList.add("hidden");
+    lastCalKey = "__null__";
+    return;
+  }
+  wrap.classList.remove("hidden");
+
+  const key = events.map((e) => `${e.start}:${e.allDay ? 1 : 0}:${e.summary}`).join("|");
+  if (key === lastCalKey) return;
+  lastCalKey = key;
+
+  list.innerHTML = "";
+  if (events.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "ov-cal-empty";
+    empty.textContent = "Nothing scheduled";
+    list.appendChild(empty);
+    return;
+  }
+  // Build via DOM (textContent) rather than innerHTML — event summaries are
+  // untrusted calendar data and must not be interpreted as HTML.
+  for (const ev of events) {
+    const row = document.createElement("div");
+    row.className = "ov-cal-row";
+    const when = document.createElement("span");
+    when.className = "ov-cal-when";
+    when.textContent = formatEventWhen(ev.start, ev.allDay);
+    const title = document.createElement("span");
+    title.className = "ov-cal-title";
+    title.textContent = ev.summary || "(untitled)";
+    row.appendChild(when);
+    row.appendChild(title);
+    list.appendChild(row);
+  }
 }
 
 // --- Battery / power stats --------------------------------------------------
@@ -581,6 +628,7 @@ function render(s: FrameState): void {
   if (housePower) housePower.textContent = fmtPower(s.housePower);
 
   renderWeather(s.weather, s.weatherTemp);
+  renderCalendar(s.calendar);
   renderAcs(s.acs);
 
   // Stale dot: visible whenever we're showing last-known (disconnected/offline).

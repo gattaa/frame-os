@@ -88,6 +88,29 @@ Find your real ids (Developer Tools → States) and set them in
 | `climate` | the AC unit | a `climate.*` entity |
 | `weather` | current condition (`sunny`, `rainy`, ...) | a `weather.*` entity, e.g. `weather.forecast_home` (met.no integration) |
 
+The overlay's agenda tile adds one **optional** sixth entity — see "Google
+Calendar" below.
+
+### 4. Google Calendar (optional — powers the agenda tile)
+The top-right overlay can show the next few calendar events. It's driven by a
+single `calendar.*` entity, so any HA calendar integration works; for Google:
+
+1. HA → **Settings → Devices & Services → Add Integration → "Google
+   Calendar"** and complete the OAuth flow (HA walks you through creating
+   Application Credentials in Google Cloud — no client secret goes in
+   `secrets.yaml` or this repo).
+2. HA creates one `calendar.<name>` entity per calendar. Find the id you want
+   in **Developer Tools → States** (e.g. `calendar.family`).
+3. Add it to `runtime-config.json` as `entities.calendar`:
+   ```json
+   "entities": { …, "calendar": "calendar.family" }
+   ```
+
+That's all — **no package YAML is needed**. The frame reads the agenda over the
+same websocket it already uses (calling the `calendar.get_events` service with
+the long-lived token from step 1), so there's nothing to add to
+`packages/frame.yaml`. Leave `entities.calendar` out entirely to hide the tile.
+
 ## Placeholder → where you set it
 
 | Placeholder | Lives in | Set it to |
@@ -96,6 +119,7 @@ Find your real ids (Developer Tools → States) and set them in
 | `batteryStatus` | `runtime-config.json` → `entities.batteryStatus` | your charge/discharge status sensor |
 | `housePower` | `runtime-config.json` → `entities.housePower` | your live house power sensor |
 | `climate` | `runtime-config.json` → `entities.climate` | your `climate.*` AC entity |
+| `calendar` (optional) | `runtime-config.json` → `entities.calendar` | your `calendar.*` entity (e.g. Google Calendar); omit to hide the agenda tile |
 | `haUrl` / `haToken` | `runtime-config.json` | your HA URL (via nginx) / long-lived access token |
 | night-mode boolean | `frame/.env` `VITE_HA_NIGHT_MODE` (not sensitive, stays build-time) | `input_boolean.frame_night_mode` |
 | `FULLY_KIOSK_BASE` | `frame/.env` `VITE_FULLY_KIOSK_BASE` | `http://<tablet-ip>:2323` (only if the PWA calls Fully directly; otherwise HA drives the screen) |

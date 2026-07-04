@@ -7,7 +7,8 @@ Produces, under data/:
   - manifest.json     : a valid manifest pointing at them (with favourite/thumb)
   - mock-entities.json : fake Home Assistant values (battery %, battery
                          charge/discharge status, house power draw, 4
-                         AC climate entities, and a weather entity)
+                         AC climate entities, a weather entity, and a few
+                         upcoming calendar events)
 
 These outputs are written exactly the way the real processor writes them
 (see haos-addons/frame-uploader/src/processor.py), so the PWA cannot tell
@@ -28,6 +29,7 @@ import io
 import json
 import os
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, List, Tuple
 
@@ -152,6 +154,36 @@ WEATHER_STATES = [
 ]
 
 
+def mock_calendar() -> List[dict]:
+    """A few upcoming events, shaped like `calendar.get_events` returns (a
+    `start`/`end` string + `summary`). Anchored to the current clock so the
+    agenda tile always shows sensible "Today / Tomorrow / weekday" labels.
+    Timed events carry the local offset; the all-day one is date-only."""
+    now = datetime.now().astimezone()
+    later = now + timedelta(hours=3)
+    tomorrow = (now + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    friday = (now + timedelta(days=3)).replace(hour=18, minute=30, second=0, microsecond=0)
+
+    def timed(dt: datetime, minutes: int, summary: str) -> dict:
+        return {
+            "start": dt.isoformat(timespec="seconds"),
+            "end": (dt + timedelta(minutes=minutes)).isoformat(timespec="seconds"),
+            "summary": summary,
+        }
+
+    return [
+        # All-day event today (date-only start = no time shown).
+        {
+            "start": now.date().isoformat(),
+            "end": (now + timedelta(days=1)).date().isoformat(),
+            "summary": "Bin collection",
+        },
+        timed(later, 60, "Dentist appointment"),
+        timed(tomorrow, 90, "Yoga with Anna"),
+        timed(friday, 120, "Dinner — a rather long event title to test truncation"),
+    ]
+
+
 def mock_entities() -> dict:
     """Shaped to mirror Home Assistant state objects the PWA will read.
 
@@ -195,6 +227,9 @@ def mock_entities() -> dict:
             "state": "off",  # flip to "on" to preview the dark night theme
             "friendly_name": "Frame Night Mode",
         },
+        # Upcoming calendar events for the agenda tile. Remove this key (or set
+        # it to []) to preview the tile's hidden / "Nothing scheduled" states.
+        "calendar": mock_calendar(),
         "acs": [
             {
                 "entity_id": "climate.camera",
